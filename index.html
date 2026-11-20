@@ -13,6 +13,10 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&display=swap');
     * { font-family: 'Pretendard', sans-serif; user-select: none; }
+    html, body { margin: 0; padding: 0; }
+    @media (min-width: 768px) {
+      html, body { height: 100%; overflow: hidden; }
+    }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     .touch-scroll { -webkit-overflow-scrolling: touch; touch-action: pan-y; }
     ::-webkit-scrollbar-track { background: #0f172a; }
@@ -27,7 +31,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen md:h-[100dvh] w-screen overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col">
+<body class="bg-slate-950 text-slate-100 min-h-screen md:min-h-0 md:h-full w-full overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col">
 
   <!-- 실시간 주문 체결 토스트 알림 배너 -->
   <div id="orderToastBanner" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2.5 px-5 py-3 rounded-2xl shadow-2xl border text-xs sm:text-sm font-black transition-all duration-200 pointer-events-none">
@@ -216,9 +220,9 @@
   <!-- 메인 본문 -->
   <div class="flex-1 min-h-0 flex flex-col md:overflow-hidden relative">
     <!-- 1. 거래소 뷰 -->
-    <div id="marketView" class="w-full flex-1 min-h-0 flex flex-col md:flex-row">
+    <div id="marketView" class="w-full flex-1 min-h-0 md:absolute md:inset-0 flex flex-col md:flex-row">
       <!-- [좌측] 20개 종목 리스트 -->
-      <aside class="w-full md:w-80 lg:w-96 h-72 md:h-full min-h-0 overflow-hidden flex flex-col bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex-shrink-0">
+      <aside class="w-full md:w-64 lg:w-80 h-72 md:h-full min-h-0 overflow-hidden flex flex-col bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex-shrink-0">
         <div class="p-2.5 border-b border-slate-800 flex items-center gap-2 flex-shrink-0">
           <div class="relative flex-1">
             <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
@@ -382,9 +386,9 @@
         </div>
       </section>
 
-      <!-- [우측] 주문 패널 (낮은 해상도/태블릿에서도 매수·매도 버튼 하단 고정) -->
-      <aside class="w-full md:w-72 lg:w-80 h-auto md:h-full min-h-0 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col p-3 md:p-3.5 flex-shrink-0 md:overflow-hidden">
-        <div class="flex-1 overflow-y-auto overscroll-contain touch-scroll min-h-0 space-y-2.5 pr-0.5">
+      <!-- [우측] 주문 패널 (버튼을 주문 총액 바로 아래에 배치해 태블릿에서도 100% 표시) -->
+      <aside class="w-full md:w-64 lg:w-72 h-auto md:h-full min-h-0 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col p-3 flex-shrink-0 md:overflow-y-auto overscroll-contain touch-scroll">
+        <div class="space-y-2.5">
           <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 space-y-1.5">
             <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
               <span><i class="fa-solid fa-wand-magic-sparkles text-amber-400 mr-1"></i>스마트 일괄 주문</span>
@@ -450,14 +454,14 @@
           </div>
         </div>
 
-        <button type="button" id="submitOrderBtn" onclick="executeOrder()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-2.5 flex-shrink-0 sticky bottom-2 z-10 cursor-pointer">
+        <button type="button" id="submitOrderBtn" onclick="executeOrder()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-3 mb-4 flex-shrink-0 cursor-pointer">
           <span>매수 주문 전송</span>
         </button>
       </aside>
     </div>
 
     <!-- 2. 학급 랭킹 전광판 뷰 -->
-    <div id="rankingView" class="hidden w-full flex-1 min-h-0 p-4 md:p-6 overflow-y-auto overscroll-contain touch-scroll bg-slate-950 flex flex-col">
+    <div id="rankingView" class="hidden w-full flex-1 min-h-0 md:absolute md:inset-0 p-4 md:p-6 overflow-y-auto overscroll-contain touch-scroll bg-slate-950 flex flex-col">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
@@ -672,7 +676,7 @@
        1. 아래 DEFAULT_FIREBASE_DB_URL의 큰따옴표(" ") 안에 기존에 쓰시던 Firebase 주소를 넣으세요.
        2. 주의: pay.html 파일의 같은 위치에도 동일한 주소가 들어있어야 지갑과 연동됩니다!
        ================================================================================= */
-    const DEFAULT_FIREBASE_DB_URL = "내주소";
+    const DEFAULT_FIREBASE_DB_URL = "https://my-stock-class-default-rtdb.firebaseio.com/";
 
     // 데이터베이스 내 저장 폴더명 (기존 학급 데이터와 동일하게 유지)
     const FIREBASE_ROOT_PATH = "kosdaq_training_room";
@@ -815,11 +819,11 @@
     let toastTimer = null;
 
     const ECON_CONFIGS = {
-      1: { label: "1단계: 경제 공황 (대폭락장 📉)", color: "text-rose-400", bias: -0.16, volatility: 0.08, extremeChance: 0.12, extremeType: 'lower' },
-      2: { label: "2단계: 경기 침체 (약세장 🌧️)", color: "text-blue-400", bias: -0.06, volatility: 0.06, extremeChance: 0.04, extremeType: 'lower' },
-      3: { label: "3단계: 보통 (랜덤 시장 ⚖️)", color: "text-amber-300", bias: 0.00, volatility: 0.07, extremeChance: 0.03, extremeType: 'random' },
-      4: { label: "4단계: 경기 회복 (호황기 🌤️)", color: "text-emerald-400", bias: 0.06, volatility: 0.06, extremeChance: 0.04, extremeType: 'upper' },
-      5: { label: "5단계: 경제 대호황 (불장 🚀)", color: "text-rose-500", bias: 0.16, volatility: 0.08, extremeChance: 0.12, extremeType: 'upper' }
+      1: { label: "1단계: 경제 공황 (대폭락장 📉)", color: "text-rose-400", bias: -0.12, volatility: 0.035, extremeChance: 0.06, extremeType: 'lower' },
+      2: { label: "2단계: 경기 침체 (약세장 🌧️)", color: "text-blue-400", bias: -0.045, volatility: 0.025, extremeChance: 0.02, extremeType: 'lower' },
+      3: { label: "3단계: 보통 (안정 시장 ±15% 이내 ⚖️)", color: "text-amber-300", bias: 0.00, volatility: 0.02, extremeChance: 0.00, extremeType: 'random' },
+      4: { label: "4단계: 경기 회복 (호황기 🌤️)", color: "text-emerald-400", bias: 0.045, volatility: 0.025, extremeChance: 0.02, extremeType: 'upper' },
+      5: { label: "5단계: 경제 대호황 (불장 🚀)", color: "text-rose-500", bias: 0.12, volatility: 0.035, extremeChance: 0.06, extremeType: 'upper' }
     };
 
     // ★ 하루치 뉴스 3개 추첨 (호재·악재 혼합 + 대상 종목 중복 방지) ★
@@ -1499,31 +1503,46 @@
         let rawRate = 0;
 
         if (stock.trend === "up") {
-          if (economyPhase === 1) rawRate = -0.05 + (Math.random() * 0.06);
-          else if (economyPhase === 2) rawRate = -0.03 + (Math.random() * 0.06);
-          else if (economyPhase === 3) rawRate = Math.random() < 0.20 ? 0.35 : (0.04 + Math.random() * 0.14);
-          else if (economyPhase === 4) rawRate = Math.random() < 0.75 ? 0.35 : (0.12 + Math.random() * 0.14);
-          else if (economyPhase === 5) rawRate = Math.random() < 0.90 ? 0.35 : (0.18 + Math.random() * 0.11);
+          if (economyPhase === 1) rawRate = -0.04 + (Math.random() * 0.05);
+          else if (economyPhase === 2) rawRate = -0.02 + (Math.random() * 0.05);
+          else if (economyPhase === 3) rawRate = 0.03 + (Math.random() * 0.08);
+          else if (economyPhase === 4) rawRate = Math.random() < 0.45 ? 0.25 : (0.08 + Math.random() * 0.10);
+          else if (economyPhase === 5) rawRate = Math.random() < 0.70 ? 0.35 : (0.14 + Math.random() * 0.10);
         } else if (stock.trend === "down") {
-          if (economyPhase === 5) rawRate = -0.01 + (Math.random() * 0.06);
-          else if (economyPhase === 4) rawRate = -0.03 + (Math.random() * 0.06);
-          else if (economyPhase === 3) rawRate = Math.random() < 0.20 ? -0.35 : (-0.04 - Math.random() * 0.14);
-          else if (economyPhase === 2) rawRate = Math.random() < 0.75 ? -0.35 : (-0.12 - Math.random() * 0.14);
-          else if (economyPhase === 1) rawRate = Math.random() < 0.90 ? -0.35 : (-0.18 - Math.random() * 0.11);
+          if (economyPhase === 5) rawRate = -0.01 + (Math.random() * 0.05);
+          else if (economyPhase === 4) rawRate = -0.02 + (Math.random() * 0.05);
+          else if (economyPhase === 3) rawRate = -(0.03 + (Math.random() * 0.08));
+          else if (economyPhase === 2) rawRate = Math.random() < 0.45 ? -0.25 : -(0.08 + Math.random() * 0.10);
+          else if (economyPhase === 1) rawRate = Math.random() < 0.70 ? -0.35 : -(0.14 + Math.random() * 0.10);
         } else {
           rawRate = econConfig.bias + (randStdNormal * econConfig.volatility);
           if (Math.random() < econConfig.extremeChance) {
             rawRate = econConfig.extremeType === 'upper' ? 0.32 : (econConfig.extremeType === 'lower' ? -0.32 : (Math.random() > 0.5 ? 0.32 : -0.32));
+          }
+          // ★ 뉴스 없는 일반 종목은 보통(3단계)에서 잔잔하게(±4.5% 이내) 움직이도록 제한 ★
+          if (economyPhase === 3) {
+            rawRate = Math.max(-0.045, Math.min(0.045, rawRate));
           }
         }
 
         // ★ 뉴스 대상 종목이면 호재/악재 영향력 반영 (약간의 시장 노이즈만 남기고 방향성 보장) ★
         const newsDelta = newsImpactMap[String(stock.code)];
         if (newsDelta !== undefined && newsDelta !== 0) {
-          const mildNoise = (Math.random() - 0.5) * 0.03;
-          rawRate = newsDelta + (econConfig.bias * 0.3) + mildNoise;
-          if (newsDelta > 0 && rawRate < 0.03) rawRate = 0.03 + Math.random() * 0.04;
-          if (newsDelta < 0 && rawRate > -0.03) rawRate = -(0.03 + Math.random() * 0.04);
+          const mildNoise = (Math.random() - 0.5) * 0.02;
+          if (economyPhase === 3) {
+            // 보통 국면에서는 뉴스 종목도 6% ~ 14.5% 이내로 깔끔하게 변동
+            const clampedMag = Math.min(0.145, Math.max(0.06, Math.abs(newsDelta) * 0.75 + Math.abs(mildNoise)));
+            rawRate = newsDelta > 0 ? clampedMag : -clampedMag;
+          } else {
+            rawRate = newsDelta + (econConfig.bias * 0.3) + mildNoise;
+            if (newsDelta > 0 && rawRate < 0.04) rawRate = 0.04 + Math.random() * 0.04;
+            if (newsDelta < 0 && rawRate > -0.04) rawRate = -(0.04 + Math.random() * 0.04);
+          }
+        }
+
+        // ★ 경제 보통(3단계)일 때는 어떤 종목이든 최종 등락폭을 ±15% 이내로 엄격히 제한 ★
+        if (economyPhase === 3) {
+          rawRate = Math.max(-0.15, Math.min(0.15, rawRate));
         }
 
         let newPrice = Math.round(stock.basePrice * (1 + rawRate));
@@ -2307,8 +2326,8 @@
       const actionName = currentOrderType === 'buy' ? '매수' : '매도';
       submitBtn.innerHTML = `<span>[${currentStudentName}] ${actionName} 주문 전송</span>`;
       submitBtn.className = currentOrderType === 'buy'
-        ? "w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-2.5 flex-shrink-0 sticky bottom-2 z-10 cursor-pointer"
-        : "w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-2.5 flex-shrink-0 sticky bottom-2 z-10 cursor-pointer";
+        ? "w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-3 mb-4 flex-shrink-0 cursor-pointer"
+        : "w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-3 mb-4 flex-shrink-0 cursor-pointer";
     }
 
     function openTutorialModal() {
