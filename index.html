@@ -71,6 +71,10 @@
         </div>
         <input type="password" id="studentPinInput" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter') confirmStudentPinLogin()"
           class="w-48 bg-slate-950 border-2 border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2 text-center font-mono text-base text-white outline-none select-text tracking-widest">
+        <label class="flex items-center gap-1.5 text-[11px] text-slate-300 font-bold cursor-pointer">
+          <input type="checkbox" id="keepLoginCheckbox" checked class="accent-indigo-500 w-3.5 h-3.5 cursor-pointer">
+          <span>이 기기에서 로그인 유지</span>
+        </label>
         <div class="flex items-center gap-2 w-48">
           <button type="button" onclick="cancelStudentPinPrompt()" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs cursor-pointer">뒤로</button>
           <button type="button" onclick="confirmStudentPinLogin()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-xs cursor-pointer shadow">입장하기</button>
@@ -159,7 +163,7 @@
       <div class="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs">
         <i class="fa-solid fa-user-check text-emerald-400"></i>
         <select id="studentSelect" onchange="onStudentChange(this.value)" class="bg-transparent font-black text-slate-100 outline-none cursor-pointer max-w-[100px] sm:max-w-[130px] truncate"></select>
-        <button type="button" onclick="openStudentLoginOverlay()" class="text-[10px] text-indigo-400 hover:underline ml-1 font-bold cursor-pointer">계좌변경</button>
+        <button type="button" onclick="logoutStudentAccount()" class="text-[10px] text-rose-400 hover:underline ml-1 font-bold cursor-pointer" title="자동 로그인 해제 후 계좌 변경">로그아웃</button>
       </div>
 
       <div class="hidden lg:flex items-center gap-1 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs font-mono">
@@ -459,6 +463,10 @@
                 <span id="orderTotalPriceDisplay" class="font-bold text-slate-200">0원</span>
               </div>
               <div class="flex items-center justify-between text-slate-500 text-[11px]">
+                <span>증권거래세 (<span id="orderTaxRateLabel">1.0</span>%):</span>
+                <span id="orderTaxAmountDisplay" class="text-amber-300">매도 시 부과</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-500 text-[11px]">
                 <span>매도 시 실현손익:</span>
                 <span id="expectedRealizedDisplay" class="text-emerald-400">즉시 반영</span>
               </div>
@@ -538,6 +546,7 @@
       <div class="space-y-3 text-slate-300 leading-relaxed">
         <p>• <strong>오늘의 경제 브리핑 (1~3일 내 랜덤 반영)</strong>: 매일 상단에 3개의 경제 뉴스가 뜨며, 각 뉴스는 <strong>1일~3일 이내에 랜덤하게</strong> 관련 기업 주가에 반영됩니다. 상단의 <strong>[지난 뉴스 보기]</strong>로 최근 3일치 뉴스를 다시 확인할 수 있습니다.</p>
         <p>• <strong>내 포트폴리오 비공개</strong>: 다른 친구들이 어떤 주식을 보유했는지는 서로 볼 수 없으며, 오직 본인의 포트폴리오만 확인 가능합니다.</p>
+        <p>• <strong>증권거래세 (매도 시 부과)</strong>: 주식을 팔 때 매도 금액의 일정 비율(기본 <strong>1.0%</strong>, 교사 설정 가능)이 세금으로 자동 차감됩니다. 잦은 단타 매매 시 세금 부담이 커지므로 신중히 거래하세요.</p>
         <p>• <strong>1. 총 수익률순 / 2. 총자산순</strong>: 전체 자산 규모와 순수 원금 대비 전체 주식 투자 성과(미실현 평가손익 포함)를 보여줍니다.</p>
         <p>• <strong>3. 실현손익(금액)순 / 4. 실현수익률순</strong>: 주식을 매수한 뒤 실제로 <strong>매도(판매)하여 확정 지은 순수익금</strong>과 <strong>실제 투자원금 대비 확정 수익률(%)</strong> 순위입니다.</p>
         <p>• <strong>학급페이(ClassPay)와 완전 분리</strong>: 초기 예수금이 0<span class="unit-label">원</span>에서 시작하며, 선생님께 급여나 상점을 받아 예수금이 늘어나거나 매점에서 간식을 사 먹어 예수금이 줄어들어도 주식 수익률과 실현손익은 왜곡되지 않습니다.</p>
@@ -670,11 +679,20 @@
           <textarea id="setupStudentsInput" rows="4" placeholder="제임스:1234, 마이클:1234, 데니스:1234..."
             class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-slate-200 outline-none focus:border-indigo-500 font-mono select-text leading-relaxed"></textarea>
           
-          <div class="flex items-center justify-between pt-1 text-slate-400">
-            <span>시작 지원 예수금 (기본 0<span class="unit-label">원</span>):</span>
-            <div class="flex items-center gap-1">
-              <input type="number" id="setupSeedMoneyInput" value="0" step="100000" class="w-32 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-right text-slate-200 font-mono select-text">
-              <span class="unit-label">원</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-slate-400">
+            <div class="flex items-center justify-between gap-2">
+              <span>시작 지원 예수금 (기본 0<span class="unit-label">원</span>):</span>
+              <div class="flex items-center gap-1">
+                <input type="number" id="setupSeedMoneyInput" value="0" step="100000" class="w-28 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-right text-slate-200 font-mono select-text">
+                <span class="unit-label">원</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <span>매도 증권거래세율 (기본 1.0%):</span>
+              <div class="flex items-center gap-1">
+                <input type="number" id="setupSellTaxRateInput" value="1.0" min="0" max="10" step="0.1" class="w-20 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-right text-amber-300 font-mono font-bold select-text">
+                <span>%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -750,54 +768,108 @@
       { code: "102000", name: "셀트리온느", desc: "바이오 의약품·신약 개발", price: createRandomStartPrice(48000, 125000), trend: "none" }
     ];
 
-    // ★ [신규] 전날 공개 -> 다음 날 하루 마감 시 반영되는 간접 경제 뉴스 풀 (호재 15 + 악재 15 = 30개) ★
+    // ★ [신규] 1~3일 내 랜덤 반영되는 간접 경제 뉴스 풀 (호재 50 + 악재 50 = 총 100개) ★
     const DAILY_NEWS_POOL = [
-      // [IT · 반도체 · 하드웨어] 호재
-      { id: "n01", type: "good", sector: "반도체·AI", headline: "전 세계 AI 데이터센터 건설 폭증! 고성능 그래픽카드와 AI 메모리 주문이 감당 못 할 수준으로 밀려들고 있습니다.", targets: ["100200", "100400"], minImpact: 0.10, maxImpact: 0.18 },
-      { id: "n02", type: "good", sector: "스마트폰·IT", headline: "차세대 AI 탑재 신형 스마트폰 사전 예약이 역대 최고치를 경신하며 부품·기기 제조사들이 즐거운 비명을 지르고 있습니다.", targets: ["100100", "100300"], minImpact: 0.09, maxImpact: 0.16 },
-      { id: "n03", type: "good", sector: "소프트웨어·클라우드", headline: "전 세계 기업들이 업무용 AI 오피스 프로그램과 클라우드 서버 도입을 대폭 확대하고 있습니다.", targets: ["100500", "100800"], minImpact: 0.08, maxImpact: 0.15 },
-      // [IT · 반도체 · 하드웨어] 악재
-      { id: "n04", type: "bad", sector: "반도체·IT", headline: "글로벌 경기 둔화로 스마트폰과 PC 판매량이 급감하면서 메모리 반도체 재고가 쌓이고 있습니다.", targets: ["100100", "100200", "100300"], minImpact: 0.08, maxImpact: 0.15 },
-      { id: "n05", type: "bad", sector: "AI·클라우드", headline: "주요 국가들이 AI 칩 수출 규제와 데이터센터 전력 사용 제한 법안을 예고해 기술주에 먹구름이 드리웠습니다.", targets: ["100400", "100500"], minImpact: 0.09, maxImpact: 0.16 },
-
-      // [플랫폼 · 쇼핑 · 게임] 호재
-      { id: "n06", type: "good", sector: "포털·메신저", headline: "국내 온라인 광고 시장이 완연한 회복세에 접어들며 검색·메신저 기반 플랫폼들의 수익성이 크게 개선될 전망입니다.", targets: ["100600", "100700"], minImpact: 0.09, maxImpact: 0.16 },
-      { id: "n07", type: "good", sector: "유통·물류", headline: "연말 쇼핑 시즌과 기록적인 한파가 겹치며 새벽·당일 배송 온라인 주문 건수가 사상 최대를 기록했습니다.", targets: ["100900"], minImpact: 0.11, maxImpact: 0.19 },
-      { id: "n08", type: "good", sector: "게임·동영상", headline: "신작 대형 게임의 글로벌 사전 등록자가 1,000만 명을 돌파하고, 게임 스트리밍 영상 조회수도 폭발하고 있습니다.", targets: ["101000", "100800"], minImpact: 0.09, maxImpact: 0.17 },
-      // [플랫폼 · 쇼핑 · 게임] 악재
-      { id: "n09", type: "bad", sector: "플랫폼·메신저", headline: "대규모 데이터센터 장애로 국민 메신저와 검색 서비스가 수 시간 먹통이 되며 이용자 불만이 폭주하고 있습니다.", targets: ["100600", "100700"], minImpact: 0.10, maxImpact: 0.18 },
-      { id: "n10", type: "bad", sector: "유통·물류", headline: "해외 초저가 직구 앱들의 공격적인 마케팅과 물류비 상승으로 국내 온라인 배송 업체들의 수익성 악화가 우려됩니다.", targets: ["100900"], minImpact: 0.09, maxImpact: 0.16 },
-      { id: "n11", type: "bad", sector: "게임", headline: "확률형 아이템 규제 강화와 신작 게임 출시 연기 소식이 겹치며 게임 업계 전반의 투자 심리가 얼어붙었습니다.", targets: ["101000"], minImpact: 0.10, maxImpact: 0.18 },
-
-      // [자동차 · 배터리 · 우주] 호재
-      { id: "n12", type: "good", sector: "전기차·배터리", headline: "국제 유가가 배럴당 100달러를 돌파하자 전기차 전환 속도가 빨라지며 전기차와 2차전지 배터리 주문이 급증했습니다.", targets: ["101200", "101300"], minImpact: 0.10, maxImpact: 0.18 },
-      { id: "n13", type: "good", sector: "완성차", headline: "북미와 유럽 시장에서 국산 하이브리드·친환경 자동차가 올해의 차로 선정되며 수출 물량이 급증하고 있습니다.", targets: ["101100"], minImpact: 0.10, maxImpact: 0.18 },
-      { id: "n14", type: "good", sector: "우주·항공", headline: "차세대 초대형 재사용 로켓 발사와 저궤도 위성 인터넷 상용화가 완벽히 성공하며 우주 산업에 자금이 몰리고 있습니다.", targets: ["101400"], minImpact: 0.12, maxImpact: 0.21 },
-      // [자동차 · 배터리 · 우주] 악재
-      { id: "n15", type: "bad", sector: "전기차·배터리", headline: "각국 정부가 전기차 구매 보조금을 대폭 축소하기로 결정하면서 전기차와 배터리 제조사들의 판매 둔화가 우려됩니다.", targets: ["101100", "101200", "101300"], minImpact: 0.09, maxImpact: 0.16 },
-      { id: "n16", type: "bad", sector: "우주·항공", headline: "시험 발사 중이던 차세대 로켓이 궤도 진입 직전 폭발하면서 향후 발사 일정이 무기한 연기되었습니다.", targets: ["101400"], minImpact: 0.12, maxImpact: 0.20 },
-
-      // [식품 · 프랜차이즈] 호재
-      { id: "n17", type: "good", sector: "K-푸드·라면", headline: "SNS에서 한국 매운 볶음면과 라면 먹방 챌린지가 전 세계적으로 유행하며 해외 마트마다 품절 대란이 벌어졌습니다.", targets: ["101500", "101600"], minImpact: 0.10, maxImpact: 0.18 },
-      { id: "n18", type: "good", sector: "외식·커피", headline: "국제 원두 가격과 밀가루·소고기 원자재 가격이 크게 안정되면서 대형 커피·패스트푸드 체인의 마진이 급증할 전망입니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.16 },
-      // [식품 · 프랜차이즈] 악재
-      { id: "n19", type: "bad", sector: "식품·라면", headline: "이상 기후로 국제 밀가루와 팜유 가격이 급등하면서 라면·제과 기업들의 제조 원가 부담이 크게 커졌습니다.", targets: ["101500", "101600"], minImpact: 0.08, maxImpact: 0.15 },
-      { id: "n20", type: "bad", sector: "외식·커피", headline: "외식 물가 부담과 일부 매장의 위생 논란이 불거지며 글로벌 커피 및 햄버거 프랜차이즈 방문객 수가 감소했습니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.16 },
-
-      // [엔터테인먼트 · 바이오] 호재
-      { id: "n21", type: "good", sector: "엔터테인먼트", headline: "소속 K-POP 대표 그룹의 월드투어 티켓이 5분 만에 전석 매진되고 빌보드 차트 1위를 석권했습니다!", targets: ["101900"], minImpact: 0.12, maxImpact: 0.20 },
-      { id: "n22", type: "good", sector: "바이오·제약", headline: "개발 중이던 차세대 바이오 의약품이 미국과 유럽 보건당국의 최종 판매 허가를 획득하며 대형 수출길이 열렸습니다.", targets: ["102000"], minImpact: 0.12, maxImpact: 0.21 },
-      // [엔터테인먼트 · 바이오] 악재
-      { id: "n23", type: "bad", sector: "엔터테인먼트", headline: "주력 아이돌 그룹의 활동 잠정 중단과 음반 판매량 감소 소식에 엔터테인먼트 업계의 실적 우려가 커졌습니다.", targets: ["101900"], minImpact: 0.10, maxImpact: 0.18 },
-      { id: "n24", type: "bad", sector: "바이오·제약", headline: "기대를 모았던 신약 임상 시험 결과가 기준에 미달해 추가 보완 심사 통보를 받으며 바이오 투자 심리가 위축되었습니다.", targets: ["102000"], minImpact: 0.11, maxImpact: 0.19 },
-
-      // [복합 거시 뉴스]
-      { id: "n25", type: "good", sector: "수출 대기업", headline: "원·달러 환율이 유리하게 움직이며 해외 매출 비중이 높은 국내 대표 반도체·자동차·식품 수출 기업들의 실적 개선이 기대됩니다.", targets: ["100100", "101100", "101600"], minImpact: 0.07, maxImpact: 0.13 },
-      { id: "n26", type: "bad", sector: "글로벌 빅테크", headline: "미국과 유럽 규제 당국이 대형 플랫폼·IT 공룡 기업들을 대상으로 반독점 과징금 조사를 개시했습니다.", targets: ["100300", "100500", "100800"], minImpact: 0.08, maxImpact: 0.14 },
-      { id: "n27", type: "good", sector: "자율주행·AI", headline: "완전 자율주행 로보택시 시범 운행이 대도시에서 공식 허가되며 자율주행차와 AI 칩 기업들이 주목받고 있습니다.", targets: ["100400", "101200"], minImpact: 0.10, maxImpact: 0.17 },
-      { id: "n28", type: "bad", sector: "소비·내수", headline: "금리 인상 여파로 소비자들이 지갑을 닫으면서 커피, 패스트푸드, 온라인 쇼핑 소비가 일제히 둔화되고 있습니다.", targets: ["100900", "101700", "101800"], minImpact: 0.07, maxImpact: 0.14 },
-      { id: "n29", type: "good", sector: "콘텐츠·플랫폼", headline: "웹툰 원작 드라마와 K-POP 스타의 협업 콘텐츠가 글로벌 흥행에 성공하며 관련 기업들이 동반 수혜를 입고 있습니다.", targets: ["100600", "101900"], minImpact: 0.09, maxImpact: 0.16 },
-      { id: "n30", type: "bad", sector: "배터리·완성차", headline: "핵심 배터리 광물 공급망 차질과 글로벌 리콜 이슈가 겹치며 자동차·배터리 제조사들의 생산 차질이 예상됩니다.", targets: ["101100", "101300"], minImpact: 0.09, maxImpact: 0.16 }
+      { id: "n001", type: "good", sector: "반도체·AI", headline: "전 세계 AI 데이터센터 건설 폭증! 고성능 그래픽카드와 AI 메모리 주문이 감당 못 할 수준으로 밀려들고 있습니다.", targets: ["100200", "100400"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n002", type: "good", sector: "스마트폰·IT", headline: "차세대 AI 탑재 신형 스마트폰 사전 예약이 역대 최고치를 경신하며 부품·기기 제조사들이 즐거운 비명을 지르고 있습니다.", targets: ["100100", "100300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n003", type: "good", sector: "소프트웨어·클라우드", headline: "전 세계 기업들이 업무용 AI 오피스 프로그램과 클라우드 서버 도입을 대폭 확대하고 있습니다.", targets: ["100500", "100800"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n004", type: "good", sector: "메모리 반도체", headline: "글로벌 D램과 낸드플래시 반도체 고정 거래 가격이 6개월 연속 상승하며 국내 메모리 제조사들의 실적이 급등하고 있습니다.", targets: ["100100", "100200"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n005", type: "good", sector: "프리미엄 IT", headline: "신형 초경량 노트북과 웨어러블 기기가 신학기 시즌을 맞아 전 세계 매장에서 연일 완판 행진을 이어가고 있습니다.", targets: ["100300"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n006", type: "good", sector: "AI 칩셋", headline: "차세대 초고속 AI 연산용 GPU 신제품이 공개되자 주요 빅테크 기업들이 1년 치 물량을 선주문했습니다.", targets: ["100400"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n007", type: "good", sector: "운영체제·보안", headline: "전 세계 학교와 공공기관의 PC 교체 주기가 도래하면서 운영체제와 문서 소프트웨어 구독 매출이 크게 늘고 있습니다.", targets: ["100500"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n008", type: "good", sector: "폴더블·가전", headline: "화면이 접히는 신형 스마트폰과 AI 절전 가전제품이 유럽과 미국 시장에서 폭발적인 인기를 끌고 있습니다.", targets: ["100100"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n009", type: "good", sector: "고대역폭 메모리", headline: "차세대 AI 서버에 필수적인 6세대 HBM 메모리 양산 테스트를 세계 최초로 통과했다는 소식이 전해졌습니다.", targets: ["100200"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n010", type: "good", sector: "IT 생태계", headline: "모바일 앱스토어 결제 수수료 매출과 클라우드 백업 구독자 수가 역대 최대치를 기록했습니다.", targets: ["100300", "100800"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n011", type: "bad", sector: "반도체·IT", headline: "글로벌 경기 둔화로 스마트폰과 PC 판매량이 급감하면서 메모리 반도체 재고가 쌓이고 있습니다.", targets: ["100100", "100200", "100300"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n012", type: "bad", sector: "AI·클라우드", headline: "주요 국가들이 AI 칩 수출 규제와 데이터센터 전력 사용 제한 법안을 예고해 기술주에 먹구름이 드리웠습니다.", targets: ["100400", "100500"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n013", type: "bad", sector: "반도체 공정", headline: "차세대 미세공정 반도체 생산 라인에서 수율 저하 문제가 발생해 납품 일정이 지연되고 있습니다.", targets: ["100100", "100200"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n014", type: "bad", sector: "스마트폰", headline: "신형 프리미엄 스마트폰의 발열 논란과 부품 공급 차질이 겹치며 소비자 구매 취소가 잇따르고 있습니다.", targets: ["100300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n015", type: "bad", sector: "AI 반도체", headline: "대형 클라우드 기업들이 자체 제작 AI 칩 비중을 늘리겠다고 발표하자 기존 GPU 독점 기업에 대한 우려가 커졌습니다.", targets: ["100400"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n016", type: "bad", sector: "소프트웨어", headline: "전 세계 PC 운영체제 대규모 보안 업데이트 오류로 기업 업무 시스템이 일시 마비되는 사고가 발생했습니다.", targets: ["100500"], minImpact: 0.09, maxImpact: 0.17 },
+      { id: "n017", type: "bad", sector: "메모리 업황", headline: "중국 반도체 업체들이 저가형 메모리 물량을 대거 쏟아내면서 글로벌 반도체 가격이 급락하고 있습니다.", targets: ["100100", "100200"], minImpact: 0.09, maxImpact: 0.15 },
+      { id: "n018", type: "bad", sector: "IT 규제", headline: "유럽연합이 스마트폰 앱 마켓 독점 수수료에 대해 천문학적인 과징금을 부과하기로 결정했습니다.", targets: ["100300", "100800"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n019", type: "bad", sector: "AI 거품론", headline: "AI 인프라 투자 대비 수익성이 기대에 못 미친다는 보고서가 나오며 AI 칩·클라우드 관련주가 동반 약세를 보입니다.", targets: ["100400", "100500"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n020", type: "bad", sector: "가전·모바일", headline: "글로벌 관세 인상 여파로 스마트폰과 반도체 수출 기업들의 수익성이 크게 줄어들 것이라는 전망이 나왔습니다.", targets: ["100100", "100300"], minImpact: 0.08, maxImpact: 0.14 },
+      { id: "n021", type: "good", sector: "포털·메신저", headline: "국내 온라인 광고 시장이 완연한 회복세에 접어들며 검색·메신저 기반 플랫폼들의 수익성이 크게 개선될 전망입니다.", targets: ["100600", "100700"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n022", type: "good", sector: "유통·물류", headline: "연말 쇼핑 시즌과 기록적인 한파가 겹치며 새벽·당일 배송 온라인 주문 건수가 사상 최대를 기록했습니다.", targets: ["100900"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n023", type: "good", sector: "게임·동영상", headline: "신작 대형 게임의 글로벌 사전 등록자가 1,000만 명을 돌파하고, 게임 스트리밍 영상 조회수도 폭발하고 있습니다.", targets: ["101000", "100800"], minImpact: 0.09, maxImpact: 0.17 },
+      { id: "n024", type: "good", sector: "웹툰·검색", headline: "국내 웹툰 플랫폼의 북미·일본 유료 구독자가 급증하고 AI 검색 광고 클릭률이 역대 최고를 찍었습니다.", targets: ["100600"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n025", type: "good", sector: "메신저·페이", headline: "모바일 선물하기 거래액이 명절 특수로 사상 최대를 경신하고 간편결제 가맹점도 전국으로 확대되었습니다.", targets: ["100700"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n026", type: "good", sector: "동영상·검색", headline: "글로벌 동영상 플랫폼의 유료 멤버십 가입자가 1억 5천만 명을 돌파하며 광고와 구독 매출이 동반 급증했습니다.", targets: ["100800"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n027", type: "good", sector: "물류 혁신", headline: "전국에 AI 자동화 물류센터를 추가 완공하면서 배송 원가가 크게 절감되고 유료 멤버십 회원이 급증했습니다.", targets: ["100900"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n028", type: "good", sector: "게임 흥행", headline: "방학 시즌을 맞아 대표 온라인·모바일 게임의 대규모 업데이트가 호평받으며 동시 접속자가 2배로 뛰었습니다.", targets: ["101000"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n029", type: "good", sector: "이커머스", headline: "신선식품과 생필품을 온라인으로 주문하는 가구가 급증하며 포털 쇼핑과 새벽배송 기업이 나란히 호실적을 냈습니다.", targets: ["100600", "100900"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n030", type: "good", sector: "모빌리티·게임", headline: "연휴 기간 택시 호출 건수와 모바일 게임 결제액이 역대 최고치를 기록하며 생활 플랫폼 기업들이 웃고 있습니다.", targets: ["100700", "101000"], minImpact: 0.09, maxImpact: 0.15 },
+      { id: "n031", type: "bad", sector: "플랫폼·메신저", headline: "대규모 데이터센터 장애로 국민 메신저와 검색 서비스가 수 시간 먹통이 되며 이용자 불만이 폭주하고 있습니다.", targets: ["100600", "100700"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n032", type: "bad", sector: "유통·물류", headline: "해외 초저가 직구 앱들의 공격적인 마케팅과 물류비 상승으로 국내 온라인 배송 업체들의 수익성 악화가 우려됩니다.", targets: ["100900"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n033", type: "bad", sector: "게임", headline: "확률형 아이템 규제 강화와 신작 게임 출시 연기 소식이 겹치며 게임 업계 전반의 투자 심리가 얼어붙었습니다.", targets: ["101000"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n034", type: "bad", sector: "검색 시장", headline: "새로운 생성형 AI 검색 서비스들이 급부상하면서 기존 검색 포털의 점유율이 하락하고 있다는 조사 결과가 나왔습니다.", targets: ["100600", "100800"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n035", type: "bad", sector: "메신저·택시", headline: "택시 호출 수수료 논란과 플랫폼 독과점 규제 법안이 국회를 통과하면서 관련 기업에 악재가 터졌습니다.", targets: ["100700"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n036", type: "bad", sector: "동영상·광고", headline: "글로벌 기업들이 경기 불황을 이유로 온라인 동영상 광고 예산을 대폭 삭감하면서 광고 매출이 감소했습니다.", targets: ["100800"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n037", type: "bad", sector: "물류 파업", headline: "택배 물류센터 안전 점검 강화와 배송 인력 부족으로 로켓배송 지연 사태가 전국적으로 확산되고 있습니다.", targets: ["100900"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n038", type: "bad", sector: "게임 서버", headline: "대규모 이벤트 첫날 서버 접속 장애와 아이템 복사 버그가 터지면서 게임 이용자들이 대거 이탈하고 있습니다.", targets: ["101000"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n039", type: "bad", sector: "개인정보 보안", headline: "대형 포털과 온라인 쇼핑몰에서 해킹 시도가 포착되어 보안 시스템 전면 점검에 막대한 비용이 투입됩니다.", targets: ["100600", "100900"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n040", type: "bad", sector: "모바일 플랫폼", headline: "유료 멤버십 요금 인상에 반발한 이용자들의 탈퇴 행렬이 이어지며 플랫폼 기업들의 성장세가 꺾였습니다.", targets: ["100700", "100900"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n041", type: "good", sector: "전기차·배터리", headline: "국제 유가가 배럴당 100달러를 돌파하자 전기차 전환 속도가 빨라지며 전기차와 2차전지 배터리 주문이 급증했습니다.", targets: ["101200", "101300"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n042", type: "good", sector: "완성차", headline: "북미와 유럽 시장에서 국산 하이브리드·친환경 자동차가 올해의 차로 선정되며 수출 물량이 급증하고 있습니다.", targets: ["101100"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n043", type: "good", sector: "우주·항공", headline: "차세대 초대형 재사용 로켓 발사와 저궤도 위성 인터넷 상용화가 완벽히 성공하며 우주 산업에 자금이 몰리고 있습니다.", targets: ["101400"], minImpact: 0.12, maxImpact: 0.2 },
+      { id: "n044", type: "good", sector: "2차전지 신기술", headline: "10분 충전으로 800km를 주행하는 차세대 전고체 배터리 개발이 막바지에 이르렀다는 소식에 배터리주가 들썩입니다.", targets: ["101300"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n045", type: "good", sector: "자율주행", headline: "운전자 개입 없이 도심을 주행하는 완전 자율주행 소프트웨어 업데이트가 글로벌 시장에서 호평을 받고 있습니다.", targets: ["101200"], minImpact: 0.11, maxImpact: 0.18 },
+      { id: "n046", type: "good", sector: "수소·친환경차", headline: "정부가 친환경 자동차 및 수소 상용차 보급 확대에 수조 원의 예산을 투입하기로 발표했습니다.", targets: ["101100", "101300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n047", type: "good", sector: "우주 통신", headline: "항공기와 선박, 오지 마을에서도 초고속 인터넷을 쓸 수 있는 위성 통신 가입자가 500만 명을 돌파했습니다.", targets: ["101400"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n048", type: "good", sector: "글로벌 전기차", headline: "유럽 주요국들이 내연기관차 판매 금지 일정을 앞당기면서 전기차 및 배터리 업계에 대형 호재가 터졌습니다.", targets: ["101100", "101200", "101300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n049", type: "good", sector: "우주 탐사 계약", headline: "국제 우주정거장 화물 운송과 달 탐사 착륙선 발사 독점 계약을 수주하며 우주 기업의 기업가치가 급등했습니다.", targets: ["101400"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n050", type: "good", sector: "로봇·모빌리티", headline: "공장 자동화용 휴머노이드 로봇과 미래형 전기차를 결합한 스마트 팩토리 가동으로 생산 효율이 크게 높아졌습니다.", targets: ["101100", "101200"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n051", type: "bad", sector: "전기차·배터리", headline: "각국 정부가 전기차 구매 보조금을 대폭 축소하기로 결정하면서 전기차와 배터리 제조사들의 판매 둔화가 우려됩니다.", targets: ["101100", "101200", "101300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n052", type: "bad", sector: "우주·항공", headline: "시험 발사 중이던 차세대 로켓이 궤도 진입 직전 폭발하면서 향후 발사 일정이 무기한 연기되었습니다.", targets: ["101400"], minImpact: 0.12, maxImpact: 0.2 },
+      { id: "n053", type: "bad", sector: "배터리 원자재", headline: "핵심 배터리 광물인 리튬과 니켈 공급망 차질로 2차전지 공장 가동률이 크게 떨어졌습니다.", targets: ["101300"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n054", type: "bad", sector: "전기차 리콜", headline: "자율주행 센서 오작동 우려로 글로벌 시장에서 대규모 전기차 소프트웨어 리콜 명령이 내려졌습니다.", targets: ["101200"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n055", type: "bad", sector: "완성차 노조", headline: "국내 주요 자동차 생산공장 파업과 부품 수급 차질이 겹치며 신차 출고 대기가 길어지고 있습니다.", targets: ["101100"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n056", type: "bad", sector: "우주 규제", headline: "지구 저궤도 우주 쓰레기 증가 우려로 국제 항공당국이 위성 발사 허가 심사를 대폭 까다롭게 변경했습니다.", targets: ["101400"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n057", type: "bad", sector: "전기차 화재", headline: "지하주차장 전기차 배터리 화재 우려가 확산되면서 소비자들이 전기차 구매를 망설이고 있습니다.", targets: ["101200", "101300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n058", type: "bad", sector: "자동차 관세", headline: "해외 주요 수출국들이 수입 자동차에 대한 관세를 인상하겠다고 예고해 완성차 업계에 비상이 걸렸습니다.", targets: ["101100"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n059", type: "bad", sector: "태양 폭풍", headline: "강력한 태양 자기폭풍의 영향으로 저궤도 통신 위성 수십 기가 궤도를 이탈하며 손실이 발생했습니다.", targets: ["101400"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n060", type: "bad", sector: "전기차 가격 경쟁", headline: "중국 저가 전기차들의 공세에 맞서 출혈 할인 경쟁이 심화되면서 전기차·배터리 마진이 급감했습니다.", targets: ["101100", "101200", "101300"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n061", type: "good", sector: "K-푸드·라면", headline: "SNS에서 한국 매운 볶음면과 라면 먹방 챌린지가 전 세계적으로 유행하며 해외 마트마다 품절 대란이 벌어졌습니다.", targets: ["101500", "101600"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n062", type: "good", sector: "외식·커피", headline: "국제 원두 가격과 밀가루·소고기 원자재 가격이 크게 안정되면서 대형 커피·패스트푸드 체인의 마진이 급증할 전망입니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n063", type: "good", sector: "라면 수출", headline: "유럽과 중남미 대형 마트 5,000곳에 한국 대표 국물 라면과 국민 스낵이 신규 입점하며 수출액이 급증했습니다.", targets: ["101500"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n064", type: "good", sector: "매운맛 열풍", headline: "매운 볶음면 신제품이 미국 월마트와 코스트코에서 출시 일주일 만에 초도 물량 완판을 기록했습니다.", targets: ["101600"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n065", type: "good", sector: "커피 체인", headline: "시즌 한정 음료와 굿즈가 오픈런 대란을 일으키며 글로벌 프리미엄 커피 브랜드의 매장 매출이 급등했습니다.", targets: ["101700"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n066", type: "good", sector: "패스트푸드", headline: "인기 캐릭터와 협업한 한정판 햄버거 세트 메뉴가 대히트를 치며 드라이브스루 매출이 역대 최대를 찍었습니다.", targets: ["101800"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n067", type: "good", sector: "식품 공장 증설", headline: "폭발하는 해외 라면 주문에 대응하기 위해 신규 자동화 수출 공장을 완공하며 생산 능력이 40% 늘어났습니다.", targets: ["101500", "101600"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n068", type: "good", sector: "모바일 주문", headline: "전용 앱 선주문과 리워드 포인트 제도가 안착하면서 대형 커피·버거 프랜차이즈의 단골 고객이 크게 늘었습니다.", targets: ["101700", "101800"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n069", type: "good", sector: "간편식 인기", headline: "외식 물가 상승으로 집에서 라면과 스낵을 즐기는 소비자가 늘면서 국내 식품 제조사들의 매출이 껑충 뛰었습니다.", targets: ["101500"], minImpact: 0.09, maxImpact: 0.15 },
+      { id: "n070", type: "good", sector: "해외 매장 확장", headline: "동남아와 중동 지역에 신규 프리미엄 커피 매장과 패스트푸드 점포를 대규모로 출점하며 글로벌 영토를 넓히고 있습니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.15 },
+      { id: "n071", type: "bad", sector: "식품·라면", headline: "이상 기후로 국제 밀가루와 팜유 가격이 급등하면서 라면·제과 기업들의 제조 원가 부담이 크게 커졌습니다.", targets: ["101500", "101600"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n072", type: "bad", sector: "외식·커피", headline: "외식 물가 부담과 일부 매장의 위생 논란이 불거지며 글로벌 커피 및 햄버거 프랜차이즈 방문객 수가 감소했습니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n073", type: "bad", sector: "커피 원두 폭등", headline: "브라질과 베트남의 극심한 가뭄으로 국제 커피 원두 가격이 10년 만에 최고치를 경신해 커피 체인 수익성이 악화되었습니다.", targets: ["101700"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n074", type: "bad", sector: "식자재 파동", headline: "감자와 양상추, 소고기 패티 공급 가격이 급등하면서 글로벌 햄버거 프랜차이즈의 수익성에 빨간불이 켜졌습니다.", targets: ["101800"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n075", type: "bad", sector: "해외 리콜", headline: "유럽 일부 국가에서 매운 라면의 캡사이신 함량 기준을 문제 삼아 일시 판매 중단을 권고했습니다.", targets: ["101600"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n076", type: "bad", sector: "가격 인상 제동", headline: "물가 안정 대책으로 라면·과자 가격 인상이 제동이 걸리면서 원가 부담을 떠안게 된 식품주가 하락세입니다.", targets: ["101500"], minImpact: 0.09, maxImpact: 0.15 },
+      { id: "n077", type: "bad", sector: "저가 커피 공세", headline: "가성비를 앞세운 초저가 테이크아웃 커피 브랜드들이 급성장하면서 기존 프리미엄 커피 매장의 매출이 줄었습니다.", targets: ["101700"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n078", type: "bad", sector: "건강식 트렌드", headline: "저당·저나트륨 건강식 열풍이 불면서 고열량 햄버거와 인스턴트 라면 소비가 일시적으로 둔화되었습니다.", targets: ["101500", "101800"], minImpact: 0.08, maxImpact: 0.14 },
+      { id: "n079", type: "bad", sector: "해상 운임 급등", headline: "글로벌 해상 물류 운임이 두 배 가까이 뛰면서 해외 수출 비중이 큰 볶음면·라면 제조사들의 비용이 급증했습니다.", targets: ["101500", "101600"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n080", type: "bad", sector: "인건비 부담", headline: "전 세계적으로 매장 인건비와 임대료가 가파르게 오르면서 대형 커피·패스트푸드 체인의 영업이익이 줄어들 전망입니다.", targets: ["101700", "101800"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n081", type: "good", sector: "엔터테인먼트", headline: "소속 K-POP 대표 그룹의 월드투어 티켓이 5분 만에 전석 매진되고 빌보드 차트 1위를 석권했습니다!", targets: ["101900"], minImpact: 0.12, maxImpact: 0.2 },
+      { id: "n082", type: "good", sector: "바이오·제약", headline: "개발 중이던 차세대 바이오 의약품이 미국과 유럽 보건당국의 최종 판매 허가를 획득하며 대형 수출길이 열렸습니다.", targets: ["102000"], minImpact: 0.12, maxImpact: 0.2 },
+      { id: "n083", type: "good", sector: "신인 데뷔 대박", headline: "새롭게 데뷔한 신인 아이돌 그룹의 뮤직비디오가 하루 만에 조회수 5,000만 회를 돌파하며 글로벌 팬덤을 사로잡았습니다.", targets: ["101900"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n084", type: "good", sector: "바이오 신약 계약", headline: "글로벌 대형 병원 체인과 수천억 원 규모의 자가면역질환 바이오 의약품 장기 공급 계약을 체결했습니다.", targets: ["102000"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n085", type: "good", sector: "팬덤 플랫폼", headline: "전 세계 팬들이 모이는 유료 소통 플랫폼과 공식 응원봉·굿즈 매출이 분기 사상 최대치를 경신했습니다.", targets: ["101900"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n086", type: "good", sector: "항암제 임상 통과", headline: "차세대 표적 항암 바이오 신약이 글로벌 임상 3상에서 탁월한 효능을 입증하며 의학계의 찬사를 받았습니다.", targets: ["102000"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n087", type: "bad", sector: "엔터테인먼트", headline: "주력 아이돌 그룹의 활동 잠정 중단과 음반 판매량 감소 소식에 엔터테인먼트 업계의 실적 우려가 커졌습니다.", targets: ["101900"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n088", type: "bad", sector: "바이오·제약", headline: "기대를 모았던 신약 임상 시험 결과가 기준에 미달해 추가 보완 심사 통보를 받으며 바이오 투자 심리가 위축되었습니다.", targets: ["102000"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n089", type: "bad", sector: "소속사 갈등", headline: "엔터테인먼트 기업 내부 경영진 갈등과 아티스트 재계약 불확실성이 불거지며 주가가 흔들리고 있습니다.", targets: ["101900"], minImpact: 0.1, maxImpact: 0.18 },
+      { id: "n090", type: "bad", sector: "의약품 약가 인하", headline: "미국과 유럽 정부가 바이오 의약품 보험 약가를 대폭 인하하기로 발표하면서 제약사들의 수익성 둔화가 우려됩니다.", targets: ["102000"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n091", type: "bad", sector: "공연 취소", headline: "해외 스타디움 투어 일정이 현지 사정으로 대거 연기되면서 엔터테인먼트 회사의 분기 매출 타격이 불가피합니다.", targets: ["101900"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n092", type: "bad", sector: "바이오 특허 분쟁", headline: "글로벌 경쟁 제약사가 바이오 복제약 특허 침해 소송을 제기하면서 신제품 유럽 출시가 지연될 위기에 놓였습니다.", targets: ["102000"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n093", type: "good", sector: "수출 대기업", headline: "원·달러 환율이 유리하게 움직이며 해외 매출 비중이 높은 국내 대표 반도체·자동차·식품 수출 기업들의 실적 개선이 기대됩니다.", targets: ["100100", "101100", "101600"], minImpact: 0.07, maxImpact: 0.13 },
+      { id: "n094", type: "good", sector: "자율주행·AI", headline: "완전 자율주행 로보택시 시범 운행이 대도시에서 공식 허가되며 자율주행차와 AI 칩 기업들이 주목받고 있습니다.", targets: ["100400", "101200"], minImpact: 0.1, maxImpact: 0.17 },
+      { id: "n095", type: "good", sector: "콘텐츠·플랫폼", headline: "웹툰 원작 드라마와 K-POP 스타의 협업 콘텐츠가 글로벌 흥행에 성공하며 관련 기업들이 동반 수혜를 입고 있습니다.", targets: ["100600", "101900"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n096", type: "good", sector: "금리 인하 기대", headline: "중앙은행이 기준금리를 인하하면서 미래 성장 산업인 우주·바이오·게임 기업들로 투자 자금이 대거 유입되고 있습니다.", targets: ["101000", "101400", "102000"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n097", type: "bad", sector: "글로벌 빅테크", headline: "미국과 유럽 규제 당국이 대형 플랫폼·IT 공룡 기업들을 대상으로 반독점 과징금 조사를 개시했습니다.", targets: ["100300", "100500", "100800"], minImpact: 0.08, maxImpact: 0.14 },
+      { id: "n098", type: "bad", sector: "소비·내수", headline: "금리 인상 여파로 소비자들이 지갑을 닫으면서 커피, 패스트푸드, 온라인 쇼핑 소비가 일제히 둔화되고 있습니다.", targets: ["100900", "101700", "101800"], minImpact: 0.07, maxImpact: 0.14 },
+      { id: "n099", type: "bad", sector: "배터리·완성차", headline: "핵심 배터리 광물 공급망 차질과 글로벌 리콜 이슈가 겹치며 자동차·배터리 제조사들의 생산 차질이 예상됩니다.", targets: ["101100", "101300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n100", type: "bad", sector: "전력난 우려", headline: "기록적인 폭염으로 전력 수급에 비상이 걸리면서 전력 소모가 막대한 반도체 공장과 데이터센터 운영 비용이 급등했습니다.", targets: ["100200", "100400", "100500"], minImpact: 0.08, maxImpact: 0.14 }
     ];
 
     const DEFAULT_STUDENTS = [
@@ -836,6 +908,7 @@
     let pendingNews = [];
     let newsHistory = [];
     let isTradingPaused = false;
+    let sellTaxRate = 1.0; // 매도 시 증권거래세율 (%)
     let isNewsBannerCollapsed = false;
     let currentStudentName = "";
     let pendingPinStudentName = "";
@@ -1176,6 +1249,50 @@
     function getLocalKeyForRoom(roomId) { return `class_stock_training_game_${roomId}`; }
     function getSnapshotKeyForRoom(roomId) { return `class_stock_training_undo_${roomId}`; }
     function getMyNameKeyForRoom(roomId) { return `class_stock_training_my_name_${roomId}`; }
+    function getAutoLoginKeyForRoom(roomId) { return `class_stock_training_autologin_${roomId}`; }
+
+    function saveAutoLoginSession(name, pin) {
+      localStorage.setItem(getAutoLoginKeyForRoom(currentRoomId), JSON.stringify({ name: String(name), pin: String(pin) }));
+    }
+
+    function clearAutoLoginSession() {
+      localStorage.removeItem(getAutoLoginKeyForRoom(currentRoomId));
+    }
+
+    function tryAutoLoginStudent(isFromCloud = false) {
+      if (isTeacherMode) return false;
+      const raw = localStorage.getItem(getAutoLoginKeyForRoom(currentRoomId));
+      if (!raw) return false;
+      try {
+        const saved = JSON.parse(raw);
+        if (!saved || !saved.name) return false;
+        const st = students[saved.name];
+        if (st) {
+          const correctPin = String(st.pin || "1234");
+          if (String(saved.pin) === correctPin) {
+            currentStudentName = saved.name;
+            localStorage.setItem(getMyNameKeyForRoom(currentRoomId), saved.name);
+            const overlay = document.getElementById('studentLoginOverlay');
+            if (overlay && !overlay.classList.contains('hidden')) {
+              overlay.classList.add('hidden');
+            }
+            return true;
+          } else if (isFromCloud) {
+            clearAutoLoginSession();
+            openStudentLoginOverlay();
+            showOrderToast("🔒 비밀번호가 변경되어 다시 로그인이 필요합니다.", "error");
+            return false;
+          }
+        } else if (isFromCloud) {
+          clearAutoLoginSession();
+          openStudentLoginOverlay();
+          return false;
+        }
+      } catch (e) {
+        clearAutoLoginSession();
+      }
+      return false;
+    }
     function getFirebasePathForRoom() {
       return FIREBASE_ROOT_PATH;
     }
@@ -1250,6 +1367,7 @@
           prevTurnStudentRanks = cloudData.prevTurnStudentRanks || {};
 
           isTradingPaused = !!cloudData.isTradingPaused;
+          sellTaxRate = cloudData.sellTaxRate !== undefined ? Math.max(0, Number(cloudData.sellTaxRate)) : 1.0;
 
           const normalizeNewsList = (raw) => {
             if (!raw) return [];
@@ -1331,6 +1449,7 @@
             selectedStockCode = stocks[0] ? stocks[0].code : null;
           }
 
+          tryAutoLoginStudent(true);
           saveLocalMirror();
           updateRoomSelectorUI();
           updateEconomyPhaseUI();
@@ -1386,7 +1505,7 @@
         const path = getFirebasePathForRoom(currentRoomId);
         firebaseDb.ref(path).update({
           roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students,
-          todayNews, pendingNews, newsHistory, isTradingPaused, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks, updatedAt: Date.now()
+          todayNews, pendingNews, newsHistory, isTradingPaused, sellTaxRate, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks, updatedAt: Date.now()
         }).catch(err => {
           console.error("클라우드 저장 실패:", err);
           showOrderToast("⚠️ 클라우드 쓰기 거부됨: Firebase 규칙(.write: true)을 확인하세요!", "error");
@@ -1415,7 +1534,7 @@
 
     function saveLocalMirror() {
       localStorage.setItem(getLocalKeyForRoom(currentRoomId), JSON.stringify({
-        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, pendingNews, newsHistory, isTradingPaused, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
+        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, pendingNews, newsHistory, isTradingPaused, sellTaxRate, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
       }));
     }
 
@@ -1461,6 +1580,12 @@
       const correctPin = String(students[pendingPinStudentName].pin || "1234");
       if (inputPin === correctPin) {
         const targetName = pendingPinStudentName;
+        const keepBox = document.getElementById('keepLoginCheckbox');
+        if (keepBox && keepBox.checked) {
+          saveAutoLoginSession(targetName, correctPin);
+        } else {
+          clearAutoLoginSession();
+        }
         cancelStudentPinPrompt();
         selectMyStudentAccount(targetName);
         showOrderToast(`👋 환영합니다! [${targetName}] 계좌에 접속했습니다.`, 'success');
@@ -1469,6 +1594,12 @@
         document.getElementById('studentPinInput').value = "";
         document.getElementById('studentPinInput').focus();
       }
+    }
+
+    function logoutStudentAccount() {
+      clearAutoLoginSession();
+      openStudentLoginOverlay();
+      showOrderToast("👋 로그아웃되었습니다. 계좌를 선택해주세요.", "sell");
     }
 
     function selectMyStudentAccount(name) {
@@ -1577,6 +1708,7 @@
           stocks = data.stocks || [];
           students = data.students || {};
           isTradingPaused = !!data.isTradingPaused;
+          sellTaxRate = data.sellTaxRate !== undefined ? Math.max(0, Number(data.sellTaxRate)) : 1.0;
           todayNews = Array.isArray(data.todayNews) && data.todayNews.length > 0 ? data.todayNews : generateDailyNews(3, marketDay);
           pendingNews = Array.isArray(data.pendingNews) ? data.pendingNews : [];
           newsHistory = Array.isArray(data.newsHistory) ? data.newsHistory : [];
@@ -1612,6 +1744,7 @@
         currentStudentName = Object.keys(students)[0];
       }
 
+      tryAutoLoginStudent(false);
       updateRoomSelectorUI();
       updateUndoButtonState();
       updateEconomyPhaseUI();
@@ -1636,6 +1769,7 @@
       prevTurnStudentAssets = {};
       prevTurnStudentRanks = {};
       isTradingPaused = false;
+      sellTaxRate = 1.0;
       newsHistory = [];
       pendingNews = [];
       setupDefaultStocks();
@@ -1985,10 +2119,13 @@
         }
         const avgPrice = Number(sData.holdings[s.code].totalCost) / currentQty;
         const costBasis = Math.round(avgPrice * qty);
-        const tradeProfit = totalOrderAmount - costBasis;
+        const taxRate = Math.max(0, Number(sellTaxRate) || 0);
+        const taxAmount = Math.round(totalOrderAmount * (taxRate / 100));
+        const netProceeds = Math.max(0, totalOrderAmount - taxAmount);
+        const tradeProfit = netProceeds - costBasis;
         const tradeRate = costBasis > 0 ? ((tradeProfit / costBasis) * 100).toFixed(2) : "0.00";
 
-        sData.cash = Number(sData.cash) + totalOrderAmount;
+        sData.cash = Number(sData.cash) + netProceeds;
         sData.realizedCost = (Number(sData.realizedCost) || 0) + costBasis;
         sData.realizedProfit = (Number(sData.realizedProfit) || 0) + tradeProfit;
 
@@ -1999,7 +2136,8 @@
         pushSingleStudentToCloud(currentStudentName);
         renderAll();
         const pSign = tradeProfit >= 0 ? '+' : '';
-        showOrderToast(`💰 ${s.name} ${qty}주 매도 확정! (실현손익: ${formatMoney(tradeProfit, true)} / ${pSign}${tradeRate}%)`, 'sell');
+        const taxTxt = taxAmount > 0 ? ` · 세금 -${formatMoney(taxAmount)}` : '';
+        showOrderToast(`💰 ${s.name} ${qty}주 매도 확정! (실현손익: ${formatMoney(tradeProfit, true)} / ${pSign}${tradeRate}%${taxTxt})`, 'sell');
       }
     }
 
@@ -2028,14 +2166,18 @@
         }
       });
 
-      const batchProfit = totalSoldAmount - totalSoldCost;
-      sData.cash = Number(sData.cash) + totalSoldAmount;
+      const taxRate = Math.max(0, Number(sellTaxRate) || 0);
+      const taxAmount = Math.round(totalSoldAmount * (taxRate / 100));
+      const netProceeds = Math.max(0, totalSoldAmount - taxAmount);
+      const batchProfit = netProceeds - totalSoldCost;
+      sData.cash = Number(sData.cash) + netProceeds;
       sData.realizedCost = (Number(sData.realizedCost) || 0) + totalSoldCost;
       sData.realizedProfit = (Number(sData.realizedProfit) || 0) + batchProfit;
 
       pushSingleStudentToCloud(currentStudentName);
       renderAll();
-      showOrderToast(`💰 전량 매도 확정! (이번 실현손익: ${formatMoney(batchProfit, true)})`, "sell");
+      const taxTxt = taxAmount > 0 ? ` · 세금 -${formatMoney(taxAmount)}` : '';
+      showOrderToast(`💰 전량 매도 확정! (이번 실현손익: ${formatMoney(batchProfit, true)}${taxTxt})`, "sell");
     }
 
     function aiRandomBuy() {
@@ -2569,20 +2711,37 @@
 
       const maxAffordableDisplay = document.getElementById('maxAffordableDisplay');
       const expEl = document.getElementById('expectedRealizedDisplay');
+      const taxRateLabel = document.getElementById('orderTaxRateLabel');
+      const taxAmtEl = document.getElementById('orderTaxAmountDisplay');
       const sData = students[currentStudentName] || { cash: 0, holdings: {} };
+      const taxRate = Math.max(0, Number(sellTaxRate) || 0);
+      if (taxRateLabel) taxRateLabel.textContent = taxRate.toFixed(1);
 
       if (currentOrderType === 'buy') {
         maxAffordableDisplay.textContent = `매수 가능: ${Math.floor(Number(sData.cash) / Number(s.price)).toLocaleString()}주`;
+        if (taxAmtEl) {
+          taxAmtEl.textContent = taxRate > 0 ? "매도 시 부과" : "면제 (0%)";
+          taxAmtEl.className = "text-slate-400";
+        }
         if (expEl) { expEl.textContent = "매도 시 확정됨"; expEl.className = "text-slate-400"; }
       } else {
         const hObj = (sData.holdings && sData.holdings[s.code]) ? sData.holdings[s.code] : null;
         const holdingQty = hObj ? Number(hObj.qty) : 0;
         maxAffordableDisplay.textContent = `보유 수량: ${holdingQty.toLocaleString()}주`;
+        const estTaxTotal = Math.round(totalOrderVal * (taxRate / 100));
+        if (taxAmtEl) {
+          taxAmtEl.textContent = estTaxTotal > 0 ? `-${formatMoney(estTaxTotal)}` : formatMoney(0);
+          taxAmtEl.className = estTaxTotal > 0 ? "text-amber-300 font-bold" : "text-slate-400";
+        }
         if (expEl) {
           if (holdingQty > 0) {
+            const effQty = Math.min(qty, holdingQty);
             const avg = Number(hObj.totalCost) / holdingQty;
-            const estProfit = Math.round((Number(s.price) - avg) * Math.min(qty, holdingQty));
-            const estRate = avg > 0 ? (((Number(s.price) - avg) / avg) * 100).toFixed(2) : "0.00";
+            const grossEff = Number(s.price) * effQty;
+            const taxEff = Math.round(grossEff * (taxRate / 100));
+            const costEff = Math.round(avg * effQty);
+            const estProfit = (grossEff - taxEff) - costEff;
+            const estRate = costEff > 0 ? ((estProfit / costEff) * 100).toFixed(2) : "0.00";
             const sign = estProfit >= 0 ? '+' : '';
             expEl.textContent = `${formatMoney(estProfit, true)} (${sign}${estRate}%)`;
             expEl.className = estProfit >= 0 ? "price-up font-bold" : "price-down font-bold";
@@ -2682,7 +2841,7 @@
 
     function saveSnapshotBeforeTurn() {
       localStorage.setItem(getSnapshotKeyForRoom(currentRoomId), JSON.stringify({
-        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, pendingNews, newsHistory, isTradingPaused, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
+        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, pendingNews, newsHistory, isTradingPaused, sellTaxRate, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
       }));
       updateUndoButtonState();
     }
@@ -2699,6 +2858,7 @@
       pendingNews = Array.isArray(data.pendingNews) ? data.pendingNews : [];
       newsHistory = Array.isArray(data.newsHistory) ? data.newsHistory : [];
       isTradingPaused = !!data.isTradingPaused;
+      sellTaxRate = data.sellTaxRate !== undefined ? Math.max(0, Number(data.sellTaxRate)) : 1.0;
       currentStudentName = data.currentStudentName; economyPhase = data.economyPhase || 3;
       prevTurnStudentAssets = data.prevTurnStudentAssets || {}; prevTurnStudentRanks = data.prevTurnStudentRanks || {};
       localStorage.removeItem(getSnapshotKeyForRoom(currentRoomId));
@@ -2719,7 +2879,7 @@
     function exportBackupFile() {
       const labelName = roomCustomTitle || ROOM_LABELS[currentRoomId];
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
-        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, pendingNews, newsHistory, isTradingPaused, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
+        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, pendingNews, newsHistory, isTradingPaused, sellTaxRate, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
       }, null, 2));
       const a = document.createElement('a');
       a.href = dataStr; a.download = `학급모의투자_${labelName}_${marketDay}일차_백업.json`;
@@ -2742,6 +2902,7 @@
           pendingNews = Array.isArray(data.pendingNews) ? data.pendingNews : [];
           newsHistory = Array.isArray(data.newsHistory) ? data.newsHistory : [];
           isTradingPaused = !!data.isTradingPaused;
+          sellTaxRate = data.sellTaxRate !== undefined ? Math.max(0, Number(data.sellTaxRate)) : 1.0;
           economyPhase = data.economyPhase || 3;
           prevTurnStudentAssets = data.prevTurnStudentAssets || {};
           prevTurnStudentRanks = data.prevTurnStudentRanks || {};
@@ -2765,6 +2926,8 @@
       const studentEntries = Object.entries(students).map(([name, obj]) => `${name}:${obj.pin || '1234'}`);
       document.getElementById('setupStudentsInput').value = studentEntries.join(', ');
       document.getElementById('setupSeedMoneyInput').value = seedMoney;
+      const taxInp = document.getElementById('setupSellTaxRateInput');
+      if (taxInp) taxInp.value = (Number(sellTaxRate) || 0).toFixed(1);
       document.getElementById('setupStockGrid').innerHTML = stocks.map((s, idx) => `
         <div class="p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center gap-1.5">
           <span class="w-4 text-slate-500 font-mono font-bold text-[11px]">${idx + 1}</span>
@@ -2824,6 +2987,9 @@
       currencyUnit = document.getElementById('setupCurrencyUnitInput').value.trim() || "원";
       const parsedSeed = parseInt(document.getElementById('setupSeedMoneyInput').value, 10);
       seedMoney = isNaN(parsedSeed) ? 0 : parsedSeed;
+      const taxInp = document.getElementById('setupSellTaxRateInput');
+      const parsedTax = taxInp ? parseFloat(taxInp.value) : 1.0;
+      sellTaxRate = isNaN(parsedTax) ? 1.0 : Math.min(10, Math.max(0, Math.round(parsedTax * 10) / 10));
 
       const newStudents = {};
       rawEntries.forEach(entry => {
@@ -2860,7 +3026,7 @@
       renderAll();
       renderStudentLoginGrid();
       closeClassSetupModal();
-      showOrderToast(`✅ 학급 설정(화폐단위: ${currencyUnit}) 및 비밀번호가 배포되었습니다!`, "success");
+      showOrderToast(`✅ 학급 설정(화폐단위: ${currencyUnit}, 거래세: ${sellTaxRate}%)이 배포되었습니다!`, "success");
     }
 
     function resetAllGameData() {
@@ -2868,6 +3034,7 @@
       const keepUnit = currencyUnit;
       localStorage.removeItem(getLocalKeyForRoom(currentRoomId));
       localStorage.removeItem(getSnapshotKeyForRoom(currentRoomId));
+      clearAutoLoginSession();
       setupDefaults();
       currencyUnit = keepUnit;
       pushFullStateToCloud();
