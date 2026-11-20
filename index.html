@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>학급 모의투자 거래소 - KOSDAQ 클래스 (연수용 단일학급 에디션)</title>
+  <title>학급 모의투자 거래소 - KOSDAQ 클래스 (뉴스 연동 에디션)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -13,7 +13,8 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&display=swap');
     * { font-family: 'Pretendard', sans-serif; user-select: none; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    .touch-scroll { -webkit-overflow-scrolling: touch; touch-action: pan-y; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
@@ -26,7 +27,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-screen w-screen overflow-hidden flex flex-col">
+<body class="bg-slate-950 text-slate-100 min-h-screen md:h-[100dvh] w-screen overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col">
 
   <!-- 실시간 주문 체결 토스트 알림 배너 -->
   <div id="orderToastBanner" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2.5 px-5 py-3 rounded-2xl shadow-2xl border text-xs sm:text-sm font-black transition-all duration-200 pointer-events-none">
@@ -213,15 +214,15 @@
   </div>
 
   <!-- 메인 본문 -->
-  <div class="flex-1 overflow-hidden relative">
+  <div class="flex-1 min-h-0 flex flex-col md:overflow-hidden relative">
     <!-- 1. 거래소 뷰 -->
-    <div id="marketView" class="w-full h-full flex flex-col md:flex-row">
+    <div id="marketView" class="w-full flex-1 min-h-0 flex flex-col md:flex-row">
       <!-- [좌측] 20개 종목 리스트 -->
-      <aside class="w-full md:w-80 lg:w-96 h-2/5 md:h-full flex flex-col bg-slate-900 border-r border-slate-800 flex-shrink-0">
-        <div class="p-2.5 border-b border-slate-800 flex items-center gap-2">
+      <aside class="w-full md:w-80 lg:w-96 h-72 md:h-full min-h-0 overflow-hidden flex flex-col bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex-shrink-0">
+        <div class="p-2.5 border-b border-slate-800 flex items-center gap-2 flex-shrink-0">
           <div class="relative flex-1">
             <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
-            <input type="text" id="stockSearchInput" placeholder="종목명 검색..." oninput="renderStockList()"
+            <input type="text" id="stockSearchInput" placeholder="종목명 또는 업종 검색..." oninput="renderStockList()"
               class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 select-text">
           </div>
           <select id="sortSelect" onchange="renderStockList()" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-300">
@@ -231,12 +232,12 @@
             <option value="priceDesc">주가 높은순</option>
           </select>
         </div>
-        <div id="stockListContainer" class="flex-1 overflow-y-auto divide-y divide-slate-800/60"></div>
+        <div id="stockListContainer" class="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-scroll divide-y divide-slate-800/60 pb-10"></div>
       </aside>
 
-      <!-- [중앙] 차트 & 실현손익 성적표 & 포트폴리오 -->
-      <section class="flex-1 h-full flex flex-col bg-slate-950 overflow-y-auto">
-        <!-- 학생 상단 HUD: 예수금 + 총자산/총수익률 + 실현손익/실현수익률 모두 표시 -->
+      <!-- [중앙] 차트 & 오늘의 뉴스 & 실현손익 성적표 & 포트폴리오 -->
+      <section class="flex-1 min-h-0 md:h-full flex flex-col bg-slate-950 md:overflow-y-auto overscroll-contain touch-scroll min-w-0">
+        <!-- 학생 상단 HUD -->
         <div class="p-3 bg-indigo-950/30 border-b border-indigo-900/40 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div class="flex items-center gap-2">
             <span class="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-black text-[11px]" id="hudRoomBadge">연수학급</span>
@@ -265,11 +266,33 @@
           </div>
         </div>
 
+        <!-- ★ [신규] 오늘의 경제 뉴스 속보 배너 (다음 날 하루 마감 시 주가 반영) ★ -->
+        <div id="dailyNewsBanner" class="px-4 py-2.5 bg-slate-900/80 border-b border-amber-500/25 flex-shrink-0">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-[10px] flex items-center gap-1">
+                <i class="fa-solid fa-newspaper"></i><span id="newsDayBadge">1일차 경제 브리핑</span>
+              </span>
+              <span class="text-[11px] text-slate-400 hidden sm:inline">아래 뉴스는 <strong class="text-amber-300">내일(하루 마감 시)</strong> 관련 기업 주가에 반영됩니다.</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="teacherRefreshNewsBtn" onclick="rerollTodayNews()" class="hidden items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold cursor-pointer">
+                <i class="fa-solid fa-shuffle"></i><span>뉴스 다시 뽑기</span>
+              </button>
+              <button type="button" onclick="toggleNewsBannerBody()" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold cursor-pointer">
+                <span id="newsToggleLabel">접기</span>
+              </button>
+            </div>
+          </div>
+          <div id="dailyNewsCardsContainer" class="grid grid-cols-1 lg:grid-cols-3 gap-2"></div>
+        </div>
+
         <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 bg-slate-900/30">
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <h2 id="detailStockName" class="text-lg font-black text-slate-100">-</h2>
               <span id="detailStockCode" class="text-xs font-mono text-slate-500 font-semibold">000000</span>
+              <span id="detailStockDesc" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-800/90 text-slate-300 border border-slate-700/80 font-medium">-</span>
               <span id="limitBadge" class="hidden text-[10px] font-black px-1.5 py-0.5 rounded">상한가</span>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
@@ -286,7 +309,7 @@
           </div>
         </div>
 
-        <div class="p-4 flex-shrink-0 flex flex-col h-[250px] md:h-[280px] relative z-0 overflow-hidden">
+        <div class="p-4 flex-shrink-0 flex flex-col h-[230px] md:h-[260px] relative z-0 overflow-hidden">
           <div class="w-full h-full relative bg-slate-900/40 rounded-xl border border-slate-800/80 p-2 overflow-hidden">
             <canvas id="stockHistoryChart"></canvas>
           </div>
@@ -359,80 +382,82 @@
         </div>
       </section>
 
-      <!-- [우측] 주문 패널 -->
-      <aside class="w-full md:w-72 lg:w-80 h-auto md:h-full bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col p-4 flex-shrink-0">
-        <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 mb-3 space-y-1.5">
-          <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
-            <span><i class="fa-solid fa-wand-magic-sparkles text-amber-400 mr-1"></i>스마트 일괄 주문</span>
-            <span class="text-[9px] text-slate-500">내 계좌 즉시 체결</span>
+      <!-- [우측] 주문 패널 (낮은 해상도/태블릿에서도 매수·매도 버튼 하단 고정) -->
+      <aside class="w-full md:w-72 lg:w-80 h-auto md:h-full min-h-0 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col p-3 md:p-3.5 flex-shrink-0 md:overflow-hidden">
+        <div class="flex-1 overflow-y-auto overscroll-contain touch-scroll min-h-0 space-y-2.5 pr-0.5">
+          <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
+              <span><i class="fa-solid fa-wand-magic-sparkles text-amber-400 mr-1"></i>스마트 일괄 주문</span>
+              <span class="text-[9px] text-slate-500">내 계좌 즉시 체결</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 text-xs">
+              <button type="button" onclick="sellAllHoldings()" class="py-1.5 px-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-black flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all cursor-pointer">
+                <span class="flex items-center gap-1 text-[11px]"><i class="fa-solid fa-money-bill-transfer"></i>전량 매도</span>
+                <span class="text-[9px] font-normal text-rose-400">실현손익 즉시 확정</span>
+              </button>
+              <button type="button" onclick="aiRandomBuy()" class="py-1.5 px-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-black flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all cursor-pointer">
+                <span class="flex items-center gap-1 text-[11px]"><i class="fa-solid fa-robot text-amber-400"></i>AI 매수</span>
+                <span class="text-[9px] font-normal text-indigo-400">남은 예수금 풀 분산</span>
+              </button>
+            </div>
           </div>
-          <div class="grid grid-cols-2 gap-1.5 text-xs">
-            <button type="button" onclick="sellAllHoldings()" class="py-2 px-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-black flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all cursor-pointer">
-              <span class="flex items-center gap-1 text-[11px]"><i class="fa-solid fa-money-bill-transfer"></i>전량 매도</span>
-              <span class="text-[9px] font-normal text-rose-400">실현손익 즉시 확정</span>
-            </button>
-            <button type="button" onclick="aiRandomBuy()" class="py-2 px-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-black flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all cursor-pointer">
-              <span class="flex items-center gap-1 text-[11px]"><i class="fa-solid fa-robot text-amber-400"></i>AI 매수</span>
-              <span class="text-[9px] font-normal text-indigo-400">남은 예수금 풀 분산</span>
-            </button>
+
+          <div class="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800">
+            <button type="button" id="orderTypeBuyBtn" onclick="setOrderType('buy')" class="flex-1 py-1.5 text-xs font-black rounded-lg transition-all bg-rose-600 text-white shadow cursor-pointer">매수</button>
+            <button type="button" id="orderTypeSellBtn" onclick="setOrderType('sell')" class="flex-1 py-1.5 text-xs font-bold text-slate-400 hover:text-slate-200 rounded-lg transition-all cursor-pointer">매도</button>
+          </div>
+
+          <div class="space-y-2.5">
+            <div>
+              <label class="text-[11px] font-bold text-slate-400">주문 단가</label>
+              <div class="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 mt-1">
+                <span class="text-xs text-slate-400">현재가</span>
+                <span id="orderUnitPriceDisplay" class="font-black text-sm font-mono text-slate-100">0원</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                <span>주문 수량</span>
+                <span id="maxAffordableDisplay" class="text-indigo-400">가능: 0주</span>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1">
+                <button type="button" onclick="adjustOrderQty(-10)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">-10</button>
+                <button type="button" onclick="adjustOrderQty(-1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">-1</button>
+                <input type="number" id="orderQtyInput" value="1" min="1" oninput="updateOrderCalculation()"
+                  class="flex-1 bg-slate-950 border border-slate-800 rounded-lg py-1.5 text-center font-mono font-bold text-sm text-slate-100 focus:outline-none focus:border-indigo-500 select-text">
+                <button type="button" onclick="adjustOrderQty(1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">+1</button>
+                <button type="button" onclick="adjustOrderQty(10)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">+10</button>
+              </div>
+              <div class="grid grid-cols-4 gap-1 mt-1.5 text-[10px] font-mono">
+                <button type="button" onclick="setQtyPercentage(0.1)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded text-slate-400 cursor-pointer">10%</button>
+                <button type="button" onclick="setQtyPercentage(0.25)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded text-slate-400 cursor-pointer">25%</button>
+                <button type="button" onclick="setQtyPercentage(0.5)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded text-slate-400 cursor-pointer">50%</button>
+                <button type="button" onclick="setQtyPercentage(1.0)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded font-bold text-amber-300 cursor-pointer">최대</button>
+              </div>
+            </div>
+
+            <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80 space-y-1 font-mono text-xs">
+              <div class="flex items-center justify-between text-slate-400">
+                <span>주문 총액:</span>
+                <span id="orderTotalPriceDisplay" class="font-bold text-slate-200">0원</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-500 text-[11px]">
+                <span>매도 시 실현손익:</span>
+                <span id="expectedRealizedDisplay" class="text-emerald-400">즉시 반영</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 mb-3">
-          <button type="button" id="orderTypeBuyBtn" onclick="setOrderType('buy')" class="flex-1 py-1.5 text-xs font-black rounded-lg transition-all bg-rose-600 text-white shadow cursor-pointer">매수</button>
-          <button type="button" id="orderTypeSellBtn" onclick="setOrderType('sell')" class="flex-1 py-1.5 text-xs font-bold text-slate-400 hover:text-slate-200 rounded-lg transition-all cursor-pointer">매도</button>
-        </div>
-
-        <div class="space-y-3.5 flex-1">
-          <div>
-            <label class="text-[11px] font-bold text-slate-400">주문 단가</label>
-            <div class="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 mt-1">
-              <span class="text-xs text-slate-400">현재가</span>
-              <span id="orderUnitPriceDisplay" class="font-black text-sm font-mono text-slate-100">0원</span>
-            </div>
-          </div>
-
-          <div>
-            <div class="flex items-center justify-between text-[11px] font-bold text-slate-400">
-              <span>주문 수량</span>
-              <span id="maxAffordableDisplay" class="text-indigo-400">가능: 0주</span>
-            </div>
-            <div class="flex items-center gap-1.5 mt-1">
-              <button type="button" onclick="adjustOrderQty(-10)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">-10</button>
-              <button type="button" onclick="adjustOrderQty(-1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">-1</button>
-              <input type="number" id="orderQtyInput" value="1" min="1" oninput="updateOrderCalculation()"
-                class="flex-1 bg-slate-950 border border-slate-800 rounded-lg py-1.5 text-center font-mono font-bold text-sm text-slate-100 focus:outline-none focus:border-indigo-500 select-text">
-              <button type="button" onclick="adjustOrderQty(1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">+1</button>
-              <button type="button" onclick="adjustOrderQty(10)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer">+10</button>
-            </div>
-            <div class="grid grid-cols-4 gap-1 mt-1.5 text-[10px] font-mono">
-              <button type="button" onclick="setQtyPercentage(0.1)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded text-slate-400 cursor-pointer">10%</button>
-              <button type="button" onclick="setQtyPercentage(0.25)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded text-slate-400 cursor-pointer">25%</button>
-              <button type="button" onclick="setQtyPercentage(0.5)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded text-slate-400 cursor-pointer">50%</button>
-              <button type="button" onclick="setQtyPercentage(1.0)" class="py-1 bg-slate-800/80 hover:bg-slate-700 rounded font-bold text-amber-300 cursor-pointer">최대</button>
-            </div>
-          </div>
-
-          <div class="p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 space-y-1.5 font-mono text-xs">
-            <div class="flex items-center justify-between text-slate-400">
-              <span>주문 총액:</span>
-              <span id="orderTotalPriceDisplay" class="font-bold text-slate-200">0원</span>
-            </div>
-            <div class="flex items-center justify-between text-slate-500 text-[11px]">
-              <span>매도 시 실현손익:</span>
-              <span id="expectedRealizedDisplay" class="text-emerald-400">즉시 반영</span>
-            </div>
-          </div>
-        </div>
-
-        <button type="button" id="submitOrderBtn" onclick="executeOrder()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-3 cursor-pointer">
+        <button type="button" id="submitOrderBtn" onclick="executeOrder()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-2.5 flex-shrink-0 sticky bottom-2 z-10 cursor-pointer">
           <span>매수 주문 전송</span>
         </button>
       </aside>
     </div>
 
     <!-- 2. 학급 랭킹 전광판 뷰 -->
-    <div id="rankingView" class="hidden w-full h-full p-4 md:p-6 overflow-y-auto bg-slate-950 flex flex-col">
+    <div id="rankingView" class="hidden w-full flex-1 min-h-0 p-4 md:p-6 overflow-y-auto overscroll-contain touch-scroll bg-slate-950 flex flex-col">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
@@ -491,10 +516,11 @@
   <div id="tutorialModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-200">
     <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col overflow-hidden text-xs p-5 space-y-4">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-        <h3 class="font-extrabold text-base text-amber-300"><i class="fa-solid fa-book-open mr-1.5"></i>4대 랭킹 & 실현손익 산정 안내</h3>
+        <h3 class="font-extrabold text-base text-amber-300"><i class="fa-solid fa-book-open mr-1.5"></i>경제 뉴스 연동 & 4대 랭킹 안내</h3>
         <button type="button" onclick="closeTutorialModal()" class="text-slate-400 hover:text-white text-lg cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="space-y-3 text-slate-300 leading-relaxed">
+        <p>• <strong>오늘의 경제 브리핑 (전날 뉴스 → 다음 날 반영)</strong>: 매일 상단에 3개의 경제 뉴스가 뜹니다. 각 기업 이름 옆의 <strong>업종 설명</strong>을 보고 어떤 기업에 호재(상승) 또는 악재(하락)가 될지 추론해 투자하세요. 선생님이 <strong>하루 마감</strong>을 누르면 뉴스 내용이 주가에 반영됩니다.</p>
         <p>• <strong>1. 총 수익률순 / 2. 총자산순</strong>: 전체 자산 규모와 순수 원금 대비 전체 주식 투자 성과(미실현 평가손익 포함)를 보여줍니다.</p>
         <p>• <strong>3. 실현손익(금액)순 / 4. 실현수익률순</strong>: 주식을 매수한 뒤 실제로 <strong>매도(판매)하여 확정 지은 순수익금</strong>과 <strong>실제 투자원금 대비 확정 수익률(%)</strong> 순위입니다.</p>
         <p>• <strong>학급페이(ClassPay)와 완전 분리</strong>: 초기 예수금이 0<span class="unit-label">원</span>에서 시작하며, 선생님께 급여나 상점을 받아 예수금이 늘어나거나 매점에서 간식을 사 먹어 예수금이 줄어들어도 주식 수익률과 실현손익은 왜곡되지 않습니다.</p>
@@ -528,7 +554,7 @@
           <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold"><i class="fa-solid fa-newspaper"></i></span>
           <div>
             <h3 class="text-base font-black text-slate-100" id="summaryModalTitle">일일 결산 브리핑</h3>
-            <p class="text-[11px] text-slate-400">당일 시장 수익률 급등 & 급락 종목</p>
+            <p class="text-[11px] text-slate-400">전날 뉴스 반영 결과 · 당일 급등 & 급락 종목</p>
           </div>
         </div>
         <span class="text-xs font-mono font-bold text-indigo-400 px-2.5 py-1 rounded-lg bg-indigo-950">KOSDAQ 클래스</span>
@@ -555,7 +581,7 @@
       </div>
 
       <button type="button" onclick="closeDailySummaryModal()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-indigo-600 text-white font-extrabold rounded-xl text-xs shadow-lg cursor-pointer">
-        다음 날 장 시작하기
+        다음 날 장 시작하기 (새 뉴스 확인)
       </button>
     </div>
   </div>
@@ -575,7 +601,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
           <div>
             <label class="font-bold text-slate-200 block mb-1"><i class="fa-solid fa-tag text-amber-400 mr-1"></i>학급 표시 이름 (별칭)</label>
-            <input type="text" id="setupRoomCustomTitleInput" placeholder="예: 6학년 1반"
+            <input type="text" id="setupRoomCustomTitleInput" placeholder="예: 5학년 1반"
               class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-bold outline-none focus:border-indigo-500 select-text">
           </div>
           <div>
@@ -621,7 +647,7 @@
             <div>
               <label class="font-bold text-slate-200 flex items-center gap-1.5"><i class="fa-solid fa-building text-amber-400"></i>우리 반 거래소 20개 종목 및 비밀 추세 조작</label>
             </div>
-            <button type="button" onclick="restoreDefaultStockNames()" class="text-rose-400 hover:underline text-[11px] cursor-pointer">전 종목 기본값(랜덤 시작가)으로 복원</button>
+            <button type="button" onclick="restoreDefaultStockNames()" class="text-rose-400 hover:underline text-[11px] cursor-pointer">전 종목 패러디 기업(랜덤 시작가)으로 복원</button>
           </div>
           <div id="setupStockGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1"></div>
         </div>
@@ -641,20 +667,19 @@
 
   <script>
     /* =================================================================================
-       ★ [연수 선생님 필수 수정 구간] 본인 학급의 Firebase Realtime Database 주소 입력 ★
+       ★ [필수 수정 구간] 본인 학급의 Firebase Realtime Database 주소 입력 ★
        ---------------------------------------------------------------------------------
-       1. 아래 DEFAULT_FIREBASE_DB_URL의 큰따옴표(" ") 안에 선생님의 Firebase DB 주소를 넣으세요.
-       2. 주의: pay.html 파일의 같은 위치에도 동일한 주소를 입력해야 지갑과 연동됩니다!
+       1. 아래 DEFAULT_FIREBASE_DB_URL의 큰따옴표(" ") 안에 기존에 쓰시던 Firebase 주소를 넣으세요.
+       2. 주의: pay.html 파일의 같은 위치에도 동일한 주소가 들어있어야 지갑과 연동됩니다!
        ================================================================================= */
-    const DEFAULT_FIREBASE_DB_URL = "https://my-stock-class-default-rtdb.firebaseio.com/";
+    const DEFAULT_FIREBASE_DB_URL = "내주소";
 
-    // 데이터베이스 내 저장 폴더명 (기존 학급 데이터와 섞이지 않도록 연수용 경로로 분리됨)
+    // 데이터베이스 내 저장 폴더명 (기존 학급 데이터와 동일하게 유지)
     const FIREBASE_ROOT_PATH = "kosdaq_training_room";
 
     const STORAGE_KEY_FIREBASE_URL = 'class_stock_training_fb_url_v1';
     const STORAGE_KEY_CURRENT_ROOM = 'class_stock_training_room_v1';
 
-    // 1개 반 단일 체제 설정
     const ROOM_LABELS = {
       class_1: "연수학급"
     };
@@ -664,31 +689,80 @@
       return Math.round(raw / 500) * 500;
     }
 
-    // 20개 가상 기업 목록 (시작가는 초기화 시 랜덤 생성 기능 포함)
+    // ★ 20개 패러디 가상 기업 목록 (업종 설명 포함) ★
     const DEFAULT_STOCKS = [
-      { code: "100100", name: "네오테크", price: createRandomStartPrice(25000, 95000), trend: "none" },
-      { code: "100200", name: "블루오션바이오", price: createRandomStartPrice(40000, 150000), trend: "none" },
-      { code: "100300", name: "스타라이트엔터", price: createRandomStartPrice(18000, 75000), trend: "none" },
-      { code: "100400", name: "퀀텀로보틱스", price: createRandomStartPrice(55000, 180000), trend: "none" },
-      { code: "100500", name: "그린에너지솔루션", price: createRandomStartPrice(30000, 120000), trend: "none" },
-      { code: "100600", name: "코스모스항공", price: createRandomStartPrice(45000, 160000), trend: "none" },
-      { code: "100700", name: "실버라인모빌리티", price: createRandomStartPrice(22000, 88000), trend: "none" },
-      { code: "100800", name: "오즈메타버스", price: createRandomStartPrice(15000, 65000), trend: "none" },
-      { code: "100900", name: "제니스제약", price: createRandomStartPrice(35000, 130000), trend: "none" },
-      { code: "101000", name: "아이언스틸", price: createRandomStartPrice(28000, 92000), trend: "none" },
-      { code: "101100", name: "퓨처케미칼", price: createRandomStartPrice(32000, 110000), trend: "none" },
-      { code: "101200", name: "썬더배터리", price: createRandomStartPrice(60000, 210000), trend: "none" },
-      { code: "101300", name: "가디언라이프", price: createRandomStartPrice(19000, 64000), trend: "none" },
-      { code: "101400", name: "유니온뱅크", price: createRandomStartPrice(24000, 72000), trend: "none" },
-      { code: "101500", name: "글로벌트레이드", price: createRandomStartPrice(21000, 83000), trend: "none" },
-      { code: "101600", name: "드림푸드", price: createRandomStartPrice(12000, 54000), trend: "none" },
-      { code: "101700", name: "스마트기어", price: createRandomStartPrice(27000, 96000), trend: "none" },
-      { code: "101800", name: "에코소재", price: createRandomStartPrice(38000, 140000), trend: "none" },
-      { code: "101900", name: "나노반도체", price: createRandomStartPrice(50000, 195000), trend: "none" },
-      { code: "102000", name: "픽셀게임즈", price: createRandomStartPrice(16000, 78000), trend: "none" }
+      { code: "100100", name: "삼성후자", desc: "스마트폰·메모리 반도체", price: createRandomStartPrice(50000, 90000), trend: "none" },
+      { code: "100200", name: "SK하이나이스", desc: "AI용 고대역폭 메모리(HBM)", price: createRandomStartPrice(90000, 180000), trend: "none" },
+      { code: "100300", name: "사과컴퍼니", desc: "아이폰·맥북 프리미엄 IT", price: createRandomStartPrice(120000, 200000), trend: "none" },
+      { code: "100400", name: "엔비디야", desc: "AI 그래픽카드(GPU) 독점 설계", price: createRandomStartPrice(110000, 190000), trend: "none" },
+      { code: "100500", name: "마이크로하드", desc: "윈도우 OS·오피스·클라우드", price: createRandomStartPrice(80000, 150000), trend: "none" },
+      { code: "100600", name: "네이놈", desc: "국내 검색 포털·웹툰·쇼핑", price: createRandomStartPrice(40000, 95000), trend: "none" },
+      { code: "100700", name: "카카오는왜", desc: "국민 메신저·택시·페이", price: createRandomStartPrice(30000, 75000), trend: "none" },
+      { code: "100800", name: "구글링", desc: "글로벌 검색·유튜브·안드로이드", price: createRandomStartPrice(95000, 175000), trend: "none" },
+      { code: "100900", name: "쿠팡팡", desc: "로켓배송 온라인 유통·물류", price: createRandomStartPrice(25000, 68000), trend: "none" },
+      { code: "101000", name: "넥슨트", desc: "인기 온라인·모바일 게임", price: createRandomStartPrice(20000, 62000), trend: "none" },
+      { code: "101100", name: "현다이자동차", desc: "완성차·전기차·수소차 제조", price: createRandomStartPrice(45000, 110000), trend: "none" },
+      { code: "101200", name: "테슬라자냐", desc: "자율주행·글로벌 전기차", price: createRandomStartPrice(100000, 195000), trend: "none" },
+      { code: "101300", name: "LG에너지무한", desc: "전기차용 2차전지 배터리", price: createRandomStartPrice(65000, 155000), trend: "none" },
+      { code: "101400", name: "스페이스Y", desc: "재사용 로켓·우주 인터넷", price: createRandomStartPrice(75000, 165000), trend: "none" },
+      { code: "101500", name: "농심심해", desc: "국민 라면·스낵 식품 제조", price: createRandomStartPrice(22000, 58000), trend: "none" },
+      { code: "101600", name: "삼양불닭", desc: "매운 볶음면 글로벌 수출", price: createRandomStartPrice(35000, 88000), trend: "none" },
+      { code: "101700", name: "별다방커피", desc: "글로벌 프리미엄 커피 체인", price: createRandomStartPrice(28000, 72000), trend: "none" },
+      { code: "101800", name: "맥도날드날드", desc: "글로벌 햄버거 패스트푸드", price: createRandomStartPrice(26000, 65000), trend: "none" },
+      { code: "101900", name: "하이브로우", desc: "글로벌 K-POP 엔터테인먼트", price: createRandomStartPrice(42000, 115000), trend: "none" },
+      { code: "102000", name: "셀트리온느", desc: "바이오 의약품·신약 개발", price: createRandomStartPrice(48000, 125000), trend: "none" }
     ];
 
-    // 영어 3글자 스타일 이름 25명
+    // ★ [신규] 전날 공개 -> 다음 날 하루 마감 시 반영되는 간접 경제 뉴스 풀 (호재 15 + 악재 15 = 30개) ★
+    const DAILY_NEWS_POOL = [
+      // [IT · 반도체 · 하드웨어] 호재
+      { id: "n01", type: "good", sector: "반도체·AI", headline: "전 세계 AI 데이터센터 건설 폭증! 고성능 그래픽카드와 AI 메모리 주문이 감당 못 할 수준으로 밀려들고 있습니다.", targets: ["100200", "100400"], minImpact: 0.10, maxImpact: 0.18 },
+      { id: "n02", type: "good", sector: "스마트폰·IT", headline: "차세대 AI 탑재 신형 스마트폰 사전 예약이 역대 최고치를 경신하며 부품·기기 제조사들이 즐거운 비명을 지르고 있습니다.", targets: ["100100", "100300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n03", type: "good", sector: "소프트웨어·클라우드", headline: "전 세계 기업들이 업무용 AI 오피스 프로그램과 클라우드 서버 도입을 대폭 확대하고 있습니다.", targets: ["100500", "100800"], minImpact: 0.08, maxImpact: 0.15 },
+      // [IT · 반도체 · 하드웨어] 악재
+      { id: "n04", type: "bad", sector: "반도체·IT", headline: "글로벌 경기 둔화로 스마트폰과 PC 판매량이 급감하면서 메모리 반도체 재고가 쌓이고 있습니다.", targets: ["100100", "100200", "100300"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n05", type: "bad", sector: "AI·클라우드", headline: "주요 국가들이 AI 칩 수출 규제와 데이터센터 전력 사용 제한 법안을 예고해 기술주에 먹구름이 드리웠습니다.", targets: ["100400", "100500"], minImpact: 0.09, maxImpact: 0.16 },
+
+      // [플랫폼 · 쇼핑 · 게임] 호재
+      { id: "n06", type: "good", sector: "포털·메신저", headline: "국내 온라인 광고 시장이 완연한 회복세에 접어들며 검색·메신저 기반 플랫폼들의 수익성이 크게 개선될 전망입니다.", targets: ["100600", "100700"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n07", type: "good", sector: "유통·물류", headline: "연말 쇼핑 시즌과 기록적인 한파가 겹치며 새벽·당일 배송 온라인 주문 건수가 사상 최대를 기록했습니다.", targets: ["100900"], minImpact: 0.11, maxImpact: 0.19 },
+      { id: "n08", type: "good", sector: "게임·동영상", headline: "신작 대형 게임의 글로벌 사전 등록자가 1,000만 명을 돌파하고, 게임 스트리밍 영상 조회수도 폭발하고 있습니다.", targets: ["101000", "100800"], minImpact: 0.09, maxImpact: 0.17 },
+      // [플랫폼 · 쇼핑 · 게임] 악재
+      { id: "n09", type: "bad", sector: "플랫폼·메신저", headline: "대규모 데이터센터 장애로 국민 메신저와 검색 서비스가 수 시간 먹통이 되며 이용자 불만이 폭주하고 있습니다.", targets: ["100600", "100700"], minImpact: 0.10, maxImpact: 0.18 },
+      { id: "n10", type: "bad", sector: "유통·물류", headline: "해외 초저가 직구 앱들의 공격적인 마케팅과 물류비 상승으로 국내 온라인 배송 업체들의 수익성 악화가 우려됩니다.", targets: ["100900"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n11", type: "bad", sector: "게임", headline: "확률형 아이템 규제 강화와 신작 게임 출시 연기 소식이 겹치며 게임 업계 전반의 투자 심리가 얼어붙었습니다.", targets: ["101000"], minImpact: 0.10, maxImpact: 0.18 },
+
+      // [자동차 · 배터리 · 우주] 호재
+      { id: "n12", type: "good", sector: "전기차·배터리", headline: "국제 유가가 배럴당 100달러를 돌파하자 전기차 전환 속도가 빨라지며 전기차와 2차전지 배터리 주문이 급증했습니다.", targets: ["101200", "101300"], minImpact: 0.10, maxImpact: 0.18 },
+      { id: "n13", type: "good", sector: "완성차", headline: "북미와 유럽 시장에서 국산 하이브리드·친환경 자동차가 올해의 차로 선정되며 수출 물량이 급증하고 있습니다.", targets: ["101100"], minImpact: 0.10, maxImpact: 0.18 },
+      { id: "n14", type: "good", sector: "우주·항공", headline: "차세대 초대형 재사용 로켓 발사와 저궤도 위성 인터넷 상용화가 완벽히 성공하며 우주 산업에 자금이 몰리고 있습니다.", targets: ["101400"], minImpact: 0.12, maxImpact: 0.21 },
+      // [자동차 · 배터리 · 우주] 악재
+      { id: "n15", type: "bad", sector: "전기차·배터리", headline: "각국 정부가 전기차 구매 보조금을 대폭 축소하기로 결정하면서 전기차와 배터리 제조사들의 판매 둔화가 우려됩니다.", targets: ["101100", "101200", "101300"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n16", type: "bad", sector: "우주·항공", headline: "시험 발사 중이던 차세대 로켓이 궤도 진입 직전 폭발하면서 향후 발사 일정이 무기한 연기되었습니다.", targets: ["101400"], minImpact: 0.12, maxImpact: 0.20 },
+
+      // [식품 · 프랜차이즈] 호재
+      { id: "n17", type: "good", sector: "K-푸드·라면", headline: "SNS에서 한국 매운 볶음면과 라면 먹방 챌린지가 전 세계적으로 유행하며 해외 마트마다 품절 대란이 벌어졌습니다.", targets: ["101500", "101600"], minImpact: 0.10, maxImpact: 0.18 },
+      { id: "n18", type: "good", sector: "외식·커피", headline: "국제 원두 가격과 밀가루·소고기 원자재 가격이 크게 안정되면서 대형 커피·패스트푸드 체인의 마진이 급증할 전망입니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.16 },
+      // [식품 · 프랜차이즈] 악재
+      { id: "n19", type: "bad", sector: "식품·라면", headline: "이상 기후로 국제 밀가루와 팜유 가격이 급등하면서 라면·제과 기업들의 제조 원가 부담이 크게 커졌습니다.", targets: ["101500", "101600"], minImpact: 0.08, maxImpact: 0.15 },
+      { id: "n20", type: "bad", sector: "외식·커피", headline: "외식 물가 부담과 일부 매장의 위생 논란이 불거지며 글로벌 커피 및 햄버거 프랜차이즈 방문객 수가 감소했습니다.", targets: ["101700", "101800"], minImpact: 0.09, maxImpact: 0.16 },
+
+      // [엔터테인먼트 · 바이오] 호재
+      { id: "n21", type: "good", sector: "엔터테인먼트", headline: "소속 K-POP 대표 그룹의 월드투어 티켓이 5분 만에 전석 매진되고 빌보드 차트 1위를 석권했습니다!", targets: ["101900"], minImpact: 0.12, maxImpact: 0.20 },
+      { id: "n22", type: "good", sector: "바이오·제약", headline: "개발 중이던 차세대 바이오 의약품이 미국과 유럽 보건당국의 최종 판매 허가를 획득하며 대형 수출길이 열렸습니다.", targets: ["102000"], minImpact: 0.12, maxImpact: 0.21 },
+      // [엔터테인먼트 · 바이오] 악재
+      { id: "n23", type: "bad", sector: "엔터테인먼트", headline: "주력 아이돌 그룹의 활동 잠정 중단과 음반 판매량 감소 소식에 엔터테인먼트 업계의 실적 우려가 커졌습니다.", targets: ["101900"], minImpact: 0.10, maxImpact: 0.18 },
+      { id: "n24", type: "bad", sector: "바이오·제약", headline: "기대를 모았던 신약 임상 시험 결과가 기준에 미달해 추가 보완 심사 통보를 받으며 바이오 투자 심리가 위축되었습니다.", targets: ["102000"], minImpact: 0.11, maxImpact: 0.19 },
+
+      // [복합 거시 뉴스]
+      { id: "n25", type: "good", sector: "수출 대기업", headline: "원·달러 환율이 유리하게 움직이며 해외 매출 비중이 높은 국내 대표 반도체·자동차·식품 수출 기업들의 실적 개선이 기대됩니다.", targets: ["100100", "101100", "101600"], minImpact: 0.07, maxImpact: 0.13 },
+      { id: "n26", type: "bad", sector: "글로벌 빅테크", headline: "미국과 유럽 규제 당국이 대형 플랫폼·IT 공룡 기업들을 대상으로 반독점 과징금 조사를 개시했습니다.", targets: ["100300", "100500", "100800"], minImpact: 0.08, maxImpact: 0.14 },
+      { id: "n27", type: "good", sector: "자율주행·AI", headline: "완전 자율주행 로보택시 시범 운행이 대도시에서 공식 허가되며 자율주행차와 AI 칩 기업들이 주목받고 있습니다.", targets: ["100400", "101200"], minImpact: 0.10, maxImpact: 0.17 },
+      { id: "n28", type: "bad", sector: "소비·내수", headline: "금리 인상 여파로 소비자들이 지갑을 닫으면서 커피, 패스트푸드, 온라인 쇼핑 소비가 일제히 둔화되고 있습니다.", targets: ["100900", "101700", "101800"], minImpact: 0.07, maxImpact: 0.14 },
+      { id: "n29", type: "good", sector: "콘텐츠·플랫폼", headline: "웹툰 원작 드라마와 K-POP 스타의 협업 콘텐츠가 글로벌 흥행에 성공하며 관련 기업들이 동반 수혜를 입고 있습니다.", targets: ["100600", "101900"], minImpact: 0.09, maxImpact: 0.16 },
+      { id: "n30", type: "bad", sector: "배터리·완성차", headline: "핵심 배터리 광물 공급망 차질과 글로벌 리콜 이슈가 겹치며 자동차·배터리 제조사들의 생산 차질이 예상됩니다.", targets: ["101100", "101300"], minImpact: 0.09, maxImpact: 0.16 }
+    ];
+
     const DEFAULT_STUDENTS = [
       "제임스", "마이클", "데니스", "루카스", "마커스",
       "펠릭스", "알렉스", "토마스", "찰스", "맥스",
@@ -718,9 +792,11 @@
     let currencyUnit = "원";
 
     let marketDay = 1;
-    let seedMoney = 0; // 초기 예수금 0원 시작
+    let seedMoney = 0;
     let stocks = [];
     let students = {};
+    let todayNews = [];
+    let isNewsBannerCollapsed = false;
     let currentStudentName = "";
     let pendingPinStudentName = "";
     let selectedStockCode = null;
@@ -745,6 +821,121 @@
       4: { label: "4단계: 경기 회복 (호황기 🌤️)", color: "text-emerald-400", bias: 0.06, volatility: 0.06, extremeChance: 0.04, extremeType: 'upper' },
       5: { label: "5단계: 경제 대호황 (불장 🚀)", color: "text-rose-500", bias: 0.16, volatility: 0.08, extremeChance: 0.12, extremeType: 'upper' }
     };
+
+    // ★ 하루치 뉴스 3개 추첨 (호재·악재 혼합 + 대상 종목 중복 방지) ★
+    function generateDailyNews(count = 3) {
+      const goods = DAILY_NEWS_POOL.filter(n => n.type === 'good').sort(() => Math.random() - 0.5);
+      const bads = DAILY_NEWS_POOL.filter(n => n.type === 'bad').sort(() => Math.random() - 0.5);
+      const picked = [];
+      const usedTargets = new Set();
+
+      const tryPick = (pool) => {
+        for (const item of pool) {
+          if (picked.some(p => p.id === item.id)) continue;
+          const overlap = item.targets.some(t => usedTargets.has(t));
+          if (!overlap) {
+            picked.push({ ...item });
+            item.targets.forEach(t => usedTargets.add(t));
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // 호재 1개, 악재 1개 우선 확보 후 나머지 1개 랜덤
+      tryPick(goods);
+      tryPick(bads);
+      const thirdPool = Math.random() > 0.5 ? goods : bads;
+      if (!tryPick(thirdPool)) {
+        tryPick(thirdPool === goods ? bads : goods);
+      }
+
+      // 혹시 3개 미만이면 겹침 허용해서 채움
+      const allShuffled = [...DAILY_NEWS_POOL].sort(() => Math.random() - 0.5);
+      for (const item of allShuffled) {
+        if (picked.length >= count) break;
+        if (!picked.some(p => p.id === item.id)) picked.push({ ...item });
+      }
+      return picked.sort(() => Math.random() - 0.5);
+    }
+
+    function getStockDescByCode(code) {
+      const found = DEFAULT_STOCKS.find(x => String(x.code) === String(code));
+      return found ? found.desc : "";
+    }
+
+    function toggleNewsBannerBody() {
+      isNewsBannerCollapsed = !isNewsBannerCollapsed;
+      const body = document.getElementById('dailyNewsCardsContainer');
+      const label = document.getElementById('newsToggleLabel');
+      if (isNewsBannerCollapsed) {
+        body.classList.add('hidden');
+        label.textContent = "펼치기";
+      } else {
+        body.classList.remove('hidden');
+        label.textContent = "접기";
+      }
+    }
+
+    function rerollTodayNews() {
+      if (!isTeacherMode) return;
+      todayNews = generateDailyNews(3);
+      pushFullStateToCloud();
+      renderDailyNewsBanner();
+      showOrderToast("📰 오늘의 경제 뉴스 3건이 새로 추첨되었습니다!", "success");
+    }
+
+    function renderDailyNewsBanner() {
+      const container = document.getElementById('dailyNewsCardsContainer');
+      const dayBadge = document.getElementById('newsDayBadge');
+      const refreshBtn = document.getElementById('teacherRefreshNewsBtn');
+      if (!container) return;
+
+      if (dayBadge) dayBadge.textContent = `${marketDay}일차 경제 브리핑`;
+      if (refreshBtn) {
+        if (isTeacherMode) {
+          refreshBtn.classList.remove('hidden');
+          refreshBtn.classList.add('flex');
+        } else {
+          refreshBtn.classList.add('hidden');
+          refreshBtn.classList.remove('flex');
+        }
+      }
+
+      if (!Array.isArray(todayNews) || todayNews.length === 0) {
+        todayNews = generateDailyNews(3);
+      }
+
+      container.innerHTML = todayNews.map((news, idx) => {
+        const targetNames = (news.targets || []).map(code => {
+          const st = stocks.find(x => String(x.code) === String(code));
+          return st ? st.name : code;
+        }).join(', ');
+
+        const isGood = news.type === 'good';
+        const teacherHintHtml = isTeacherMode
+          ? `<div class="mt-1.5 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono">
+               <span class="${isGood ? 'text-rose-400' : 'text-blue-400'} font-bold truncate">
+                 👑 ${isGood ? '호재 상승' : '악재 하락'}: ${targetNames}
+               </span>
+               <span class="text-slate-400 shrink-0 ml-1">${isGood ? '+' : '-'}${Math.round((news.minImpact || 0.08)*100)}~${Math.round((news.maxImpact || 0.16)*100)}%</span>
+             </div>`
+          : '';
+
+        return `
+          <div class="bg-slate-950/90 border border-slate-800 hover:border-amber-500/40 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
+            <div>
+              <div class="flex items-center justify-between gap-1.5 mb-1">
+                <span class="text-[10px] font-black px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">속보 ${idx + 1} · ${news.sector || '경제'}</span>
+                <span class="text-[9px] text-slate-500 font-bold">내일 주가 반영</span>
+              </div>
+              <p class="text-[11px] text-slate-200 leading-snug font-medium">${news.headline}</p>
+            </div>
+            ${teacherHintHtml}
+          </div>
+        `;
+      }).join('');
+    }
 
     function formatMoney(amount, withSign = false) {
       const num = Number(amount) || 0;
@@ -845,6 +1036,7 @@
             isInitialRoomSync = false;
             if (!stocks || stocks.length === 0) setupDefaultStocks();
             if (!students || Object.keys(students).length === 0) setupDefaultStudents();
+            if (!todayNews || todayNews.length === 0) todayNews = generateDailyNews(3);
             pushFullStateToCloud();
             return;
           }
@@ -860,10 +1052,21 @@
           prevTurnStudentAssets = cloudData.prevTurnStudentAssets || {};
           prevTurnStudentRanks = cloudData.prevTurnStudentRanks || {};
 
+          if (cloudData.todayNews) {
+            const rawNews = Array.isArray(cloudData.todayNews) ? cloudData.todayNews : Object.values(cloudData.todayNews);
+            todayNews = rawNews.filter(Boolean).map(n => ({
+              ...n,
+              targets: Array.isArray(n.targets) ? n.targets.map(String) : Object.values(n.targets || {}).map(String)
+            }));
+          } else {
+            todayNews = generateDailyNews(3);
+          }
+
           const rawStocks = Array.isArray(cloudData.stocks) ? cloudData.stocks : Object.values(cloudData.stocks);
           stocks = rawStocks.filter(Boolean).map(s => ({
             ...s,
             code: String(s.code),
+            desc: s.desc || getStockDescByCode(s.code),
             price: Number(s.price) || 1000,
             basePrice: Number(s.basePrice || s.price) || 1000,
             change: Number(s.change) || 0,
@@ -960,7 +1163,7 @@
         const path = getFirebasePathForRoom(currentRoomId);
         firebaseDb.ref(path).update({
           roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students,
-          economyPhase, prevTurnStudentAssets, prevTurnStudentRanks, updatedAt: Date.now()
+          todayNews, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks, updatedAt: Date.now()
         }).catch(err => {
           console.error("클라우드 저장 실패:", err);
           showOrderToast("⚠️ 클라우드 쓰기 거부됨: Firebase 규칙(.write: true)을 확인하세요!", "error");
@@ -989,7 +1192,7 @@
 
     function saveLocalMirror() {
       localStorage.setItem(getLocalKeyForRoom(currentRoomId), JSON.stringify({
-        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
+        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
       }));
     }
 
@@ -1143,6 +1346,7 @@
           seedMoney = data.seedMoney !== undefined ? Number(data.seedMoney) : 0;
           stocks = data.stocks || [];
           students = data.students || {};
+          todayNews = Array.isArray(data.todayNews) && data.todayNews.length > 0 ? data.todayNews : generateDailyNews(3);
           currentStudentName = data.currentStudentName || Object.keys(students)[0];
           economyPhase = Number(data.economyPhase) || 3;
           prevTurnStudentAssets = data.prevTurnStudentAssets || {};
@@ -1151,8 +1355,12 @@
       } else { setupDefaults(); }
 
       if (!stocks || stocks.length === 0) setupDefaultStocks();
-      stocks.forEach(s => { if (!s.trend) s.trend = "none"; });
+      stocks.forEach(s => {
+        if (!s.trend) s.trend = "none";
+        if (!s.desc) s.desc = getStockDescByCode(s.code);
+      });
       if (!students || Object.keys(students).length === 0) setupDefaultStudents();
+      if (!Array.isArray(todayNews) || todayNews.length === 0) todayNews = generateDailyNews(3);
       Object.values(students).forEach(st => {
         if (!st.pin) st.pin = "1234";
         if (st.netDeposit === undefined) st.netDeposit = 0;
@@ -1190,19 +1398,20 @@
       roomTeacherPin = "10101";
       currencyUnit = "원";
       marketDay = 1;
-      seedMoney = 0; // 초기 예수금 0원
+      seedMoney = 0;
       economyPhase = 3;
       prevTurnStudentAssets = {};
       prevTurnStudentRanks = {};
       setupDefaultStocks();
       setupDefaultStudents();
+      todayNews = generateDailyNews(3);
     }
 
     function setupDefaultStocks() {
       stocks = DEFAULT_STOCKS.map(item => {
-        const randPrice = createRandomStartPrice(15000, 180000);
+        const randPrice = createRandomStartPrice(20000, 180000);
         return {
-          code: item.code, name: item.name, price: randPrice, basePrice: randPrice,
+          code: item.code, name: item.name, desc: item.desc, price: randPrice, basePrice: randPrice,
           change: 0, rate: 0, trend: "none", isUpperLimit: false, isLowerLimit: false, history: [randPrice]
         };
       });
@@ -1266,6 +1475,18 @@
       const previousDay = marketDay;
       marketDay++;
 
+      // ★ 전날 떠 있던 뉴스(todayNews)의 종목별 호재/악재 영향력 집계 ★
+      const newsImpactMap = {};
+      (todayNews || []).forEach(news => {
+        const minI = Number(news.minImpact) || 0.08;
+        const maxI = Number(news.maxImpact) || 0.16;
+        (news.targets || []).forEach(code => {
+          const mag = minI + Math.random() * (maxI - minI);
+          const signed = news.type === 'good' ? mag : -mag;
+          newsImpactMap[String(code)] = (newsImpactMap[String(code)] || 0) + signed;
+        });
+      });
+
       const limitHits = [];
 
       stocks.forEach(stock => {
@@ -1294,6 +1515,15 @@
           if (Math.random() < econConfig.extremeChance) {
             rawRate = econConfig.extremeType === 'upper' ? 0.32 : (econConfig.extremeType === 'lower' ? -0.32 : (Math.random() > 0.5 ? 0.32 : -0.32));
           }
+        }
+
+        // ★ 뉴스 대상 종목이면 호재/악재 영향력 반영 (약간의 시장 노이즈만 남기고 방향성 보장) ★
+        const newsDelta = newsImpactMap[String(stock.code)];
+        if (newsDelta !== undefined && newsDelta !== 0) {
+          const mildNoise = (Math.random() - 0.5) * 0.03;
+          rawRate = newsDelta + (econConfig.bias * 0.3) + mildNoise;
+          if (newsDelta > 0 && rawRate < 0.03) rawRate = 0.03 + Math.random() * 0.04;
+          if (newsDelta < 0 && rawRate > -0.03) rawRate = -(0.03 + Math.random() * 0.04);
         }
 
         let newPrice = Math.round(stock.basePrice * (1 + rawRate));
@@ -1325,6 +1555,9 @@
         stock.history.push(stock.price);
         if (stock.history.length > 30) stock.history.shift();
       });
+
+      // ★ 다음 날(N+1일차)에 띄워줄 새 경제 뉴스 3건 자동 추첨 ★
+      todayNews = generateDailyNews(3);
 
       pushFullStateToCloud();
       renderAll();
@@ -1588,6 +1821,7 @@
       const seedEl = document.getElementById('initSeedMoneyDisplay');
       if (seedEl) seedEl.textContent = formatMoney(seedMoney);
       renderStudentSelector();
+      renderDailyNewsBanner();
       renderStockList();
       renderDetailView();
       renderStudentHUD();
@@ -1878,7 +2112,11 @@
       const query = document.getElementById('stockSearchInput').value.trim().toLowerCase();
       const sortType = document.getElementById('sortSelect').value;
 
-      let list = stocks.filter(s => s.name.toLowerCase().includes(query) || String(s.code).includes(query));
+      let list = stocks.filter(s =>
+        s.name.toLowerCase().includes(query) ||
+        String(s.code).includes(query) ||
+        (s.desc && s.desc.toLowerCase().includes(query))
+      );
       if (sortType === 'rateDesc') list.sort((a, b) => b.rate - a.rate);
       else if (sortType === 'rateAsc') list.sort((a, b) => a.rate - b.rate);
       else if (sortType === 'priceDesc') list.sort((a, b) => b.price - a.price);
@@ -1889,18 +2127,19 @@
         const sign = isUp ? '+' : '';
         const colorClass = isUp ? 'price-up' : (isDown ? 'price-down' : 'text-slate-400');
         const bgBadge = s.isUpperLimit ? 'bg-rose-600 text-white' : (s.isLowerLimit ? 'bg-blue-600 text-white' : '');
+        const descText = s.desc || getStockDescByCode(s.code);
 
         return `
           <div onclick="selectStock('${s.code}')" class="p-3 flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-slate-800/90 border-l-4 border-indigo-500' : 'hover:bg-slate-800/40'}">
-            <div>
+            <div class="min-w-0 pr-2">
               <div class="flex items-center gap-1.5">
-                <span class="font-extrabold text-xs text-slate-200">${s.name}</span>
+                <span class="font-extrabold text-xs text-slate-200 truncate">${s.name}</span>
                 ${s.isUpperLimit ? `<span class="text-[9px] px-1 py-0.1 font-bold rounded ${bgBadge}">상한</span>` : ''}
                 ${s.isLowerLimit ? `<span class="text-[9px] px-1 py-0.1 font-bold rounded ${bgBadge}">하한</span>` : ''}
               </div>
-              <div class="text-[10px] font-mono text-slate-500 mt-0.5">${s.code}</div>
+              <div class="text-[10px] text-slate-500 mt-0.5 truncate">${descText || s.code}</div>
             </div>
-            <div class="text-right font-mono">
+            <div class="text-right font-mono shrink-0">
               <div class="font-bold text-xs text-slate-100">${formatMoney(s.price)}</div>
               <div class="text-[11px] font-semibold ${colorClass}">${sign}${Number(s.rate).toFixed(2)}%</div>
             </div>
@@ -1923,6 +2162,8 @@
 
       document.getElementById('detailStockName').textContent = s.name;
       document.getElementById('detailStockCode').textContent = s.code;
+      const descEl = document.getElementById('detailStockDesc');
+      if (descEl) descEl.textContent = s.desc || getStockDescByCode(s.code) || "일반 기업";
       document.getElementById('detailPrice').textContent = formatMoney(s.price);
 
       const isUp = s.change > 0, isDown = s.change < 0;
@@ -2066,8 +2307,8 @@
       const actionName = currentOrderType === 'buy' ? '매수' : '매도';
       submitBtn.innerHTML = `<span>[${currentStudentName}] ${actionName} 주문 전송</span>`;
       submitBtn.className = currentOrderType === 'buy'
-        ? "w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-4 cursor-pointer"
-        : "w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-4 cursor-pointer";
+        ? "w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-2.5 flex-shrink-0 sticky bottom-2 z-10 cursor-pointer"
+        : "w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-sm shadow-lg transition-all flex items-center justify-center gap-1.5 mt-2.5 flex-shrink-0 sticky bottom-2 z-10 cursor-pointer";
     }
 
     function openTutorialModal() {
@@ -2146,7 +2387,7 @@
 
     function saveSnapshotBeforeTurn() {
       localStorage.setItem(getSnapshotKeyForRoom(currentRoomId), JSON.stringify({
-        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
+        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
       }));
       updateUndoButtonState();
     }
@@ -2159,6 +2400,7 @@
       currencyUnit = (data.currencyUnit && String(data.currencyUnit).trim()) ? String(data.currencyUnit).trim() : "원";
       marketDay = data.marketDay; seedMoney = data.seedMoney !== undefined ? Number(data.seedMoney) : 0;
       stocks = data.stocks; students = data.students;
+      todayNews = Array.isArray(data.todayNews) ? data.todayNews : generateDailyNews(3);
       currentStudentName = data.currentStudentName; economyPhase = data.economyPhase || 3;
       prevTurnStudentAssets = data.prevTurnStudentAssets || {}; prevTurnStudentRanks = data.prevTurnStudentRanks || {};
       localStorage.removeItem(getSnapshotKeyForRoom(currentRoomId));
@@ -2179,7 +2421,7 @@
     function exportBackupFile() {
       const labelName = roomCustomTitle || ROOM_LABELS[currentRoomId];
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
-        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
+        roomCustomTitle, roomTeacherPin, currencyUnit, marketDay, seedMoney, stocks, students, todayNews, currentStudentName, economyPhase, prevTurnStudentAssets, prevTurnStudentRanks
       }, null, 2));
       const a = document.createElement('a');
       a.href = dataStr; a.download = `학급모의투자_${labelName}_${marketDay}일차_백업.json`;
@@ -2198,6 +2440,7 @@
           marketDay = data.marketDay || 1;
           seedMoney = data.seedMoney !== undefined ? Number(data.seedMoney) : 0;
           stocks = data.stocks; students = data.students;
+          todayNews = Array.isArray(data.todayNews) && data.todayNews.length > 0 ? data.todayNews : generateDailyNews(3);
           economyPhase = data.economyPhase || 3;
           prevTurnStudentAssets = data.prevTurnStudentAssets || {};
           prevTurnStudentRanks = data.prevTurnStudentRanks || {};
@@ -2260,7 +2503,7 @@
     function restoreDefaultStockNames() {
       stocks.forEach((s, idx) => {
         if (DEFAULT_STOCKS[idx]) {
-          const randPrice = createRandomStartPrice(15000, 180000);
+          const randPrice = createRandomStartPrice(20000, 180000);
           document.getElementById(`setup_stock_name_${idx}`).value = DEFAULT_STOCKS[idx].name;
           document.getElementById(`setup_stock_price_${idx}`).value = randPrice;
           document.getElementById(`setup_stock_trend_${idx}`).value = "none";
@@ -2303,6 +2546,7 @@
         const priceVal = parseInt(document.getElementById(`setup_stock_price_${idx}`).value, 10) || 1000;
         const trendVal = document.getElementById(`setup_stock_trend_${idx}`).value;
         if (nameVal) s.name = nameVal;
+        s.desc = getStockDescByCode(s.code);
         s.trend = trendVal;
         if (s.price !== priceVal) {
           s.price = priceVal;
