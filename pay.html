@@ -1194,47 +1194,66 @@
         return;
       }
 
+      if (!firebaseDb) {
+        showToast("⚠️ 서버 연결을 확인해주세요!", "error");
+        return;
+      }
+
       const amount = parseInt(document.getElementById('posAmountInput').value, 10) || 0;
       if (amount <= 0) {
         showToast(`⚠️ 금액 버튼을 눌러 1${currencyUnit} 이상 입력해주세요!`, "error");
         return;
       }
 
-      const st = students[currentStudentName];
-      if (!st) return;
+      const targetName = currentStudentName;
+      if (!targetName || !students[targetName]) return;
 
       const delta = (mode === 'deposit') ? amount : -amount;
-      if (Number(st.cash) + delta < 0) {
-        showToast(`❌ [${currentStudentName}] 예수금 잔액 부족! (현재: ${formatMoney(st.cash)})`, "error");
-        return;
-      }
-
       const memo = document.getElementById('posMemoInput').value.trim() || (mode === 'deposit' ? '💰 급여 지급' : '⚠️ 벌금 납부');
-      const newCash = Number(st.cash) + delta;
-      const newNetDep = (Number(st.netDeposit) || 0) + delta;
-
       const path = getFirebasePathForRoom(currentRoomId);
-      firebaseDb.ref(`${path}/students/${currentStudentName}`).update({
-        cash: newCash,
-        netDeposit: newNetDep
-      });
+      let abortReason = null;
 
-      firebaseDb.ref(`${path}/payLogs`).push({
-        student: currentStudentName,
-        type: mode,
-        amount: amount,
-        balanceAfter: newCash,
-        memo: memo,
-        actor: "선생님",
-        time: Date.now()
-      });
+      firebaseDb.ref(`${path}/students/${targetName}`).transaction((currentData) => {
+        abortReason = null;
+        const baseSource = currentData || students[targetName];
+        if (!baseSource) {
+          abortReason = "❌ 학생 정보를 찾을 수 없습니다.";
+          return;
+        }
+        const base = JSON.parse(JSON.stringify(baseSource));
+        const curCash = Number(base.cash) || 0;
+        if (curCash + delta < 0) {
+          abortReason = `❌ [${targetName}] 예수금 잔액 부족! (현재: ${formatMoney(curCash)})`;
+          return;
+        }
+        base.cash = curCash + delta;
+        base.netDeposit = (Number(base.netDeposit) || 0) + delta;
+        return base;
+      }, (error, committed, snapshot) => {
+        if (error || !committed) {
+          showToast(abortReason || "⚠️ 서버 반영 실패! 인터넷 연결 또는 권한을 확인하세요.", "error");
+          return;
+        }
+        const updated = (snapshot && snapshot.val()) ? snapshot.val() : {};
+        const newCash = Number(updated.cash) || 0;
 
-      document.getElementById('posAmountInput').value = "";
-      if (mode === 'deposit') {
-        showToast(`💰 [${currentStudentName}] ${formatMoney(amount, true)} 증액 완료!`);
-      } else {
-        showToast(`💸 [${currentStudentName}] -${formatMoney(amount)} 차감 완료!`);
-      }
+        firebaseDb.ref(`${path}/payLogs`).push({
+          student: targetName,
+          type: mode,
+          amount: amount,
+          balanceAfter: newCash,
+          memo: memo,
+          actor: "선생님",
+          time: Date.now()
+        }).catch(() => {});
+
+        document.getElementById('posAmountInput').value = "";
+        if (mode === 'deposit') {
+          showToast(`💰 [${targetName}] ${formatMoney(amount, true)} 증액 완료!`);
+        } else {
+          showToast(`💸 [${targetName}] -${formatMoney(amount)} 차감 완료!`);
+        }
+      });
     }
 
     function updateStaffBalancePreview() {
@@ -1338,45 +1357,61 @@
         return;
       }
 
+      if (!firebaseDb) {
+        showToast("⚠️ 서버 연결을 확인해주세요!", "error");
+        return;
+      }
+
       const amount = parseInt(document.getElementById('staffAmountInput').value, 10) || 0;
       if (amount <= 0) {
         showToast("⚠️ 결제할 금액이나 가격표 버튼을 눌러주세요!", "error");
         return;
       }
 
-      const st = students[staffScannedStudent];
-      const currentCash = Number(st.cash) || 0;
-
-      if (currentCash < amount) {
-        showToast(`❌ [${staffScannedStudent}] 잔액 부족! (현재 잔액: ${formatMoney(currentCash)})`, "error");
-        return;
-      }
-
+      const targetName = staffScannedStudent;
       const memo = document.getElementById('staffMemoInput').value.trim() || "🍬 간식";
-      const newCash = currentCash - amount;
-      const newNetDep = (Number(st.netDeposit) || 0) - amount;
-
       const path = getFirebasePathForRoom(currentRoomId);
-      firebaseDb.ref(`${path}/students/${staffScannedStudent}`).update({
-        cash: newCash,
-        netDeposit: newNetDep
+      let abortReason = null;
+
+      firebaseDb.ref(`${path}/students/${targetName}`).transaction((currentData) => {
+        abortReason = null;
+        const baseSource = currentData || students[targetName];
+        if (!baseSource) {
+          abortReason = "❌ 학생 정보를 찾을 수 없습니다.";
+          return;
+        }
+        const base = JSON.parse(JSON.stringify(baseSource));
+        const currentCash = Number(base.cash) || 0;
+        if (currentCash < amount) {
+          abortReason = `❌ [${targetName}] 잔액 부족! (현재 잔액: ${formatMoney(currentCash)})`;
+          return;
+        }
+        base.cash = currentCash - amount;
+        base.netDeposit = (Number(base.netDeposit) || 0) - amount;
+        return base;
+      }, (error, committed, snapshot) => {
+        if (error || !committed) {
+          showToast(abortReason || "⚠️ 결제 반영 실패! 인터넷 연결 또는 권한을 확인하세요.", "error");
+          return;
+        }
+        const updated = (snapshot && snapshot.val()) ? snapshot.val() : {};
+        const newCash = Number(updated.cash) || 0;
+
+        firebaseDb.ref(`${path}/payLogs`).push({
+          student: targetName,
+          type: 'withdraw',
+          amount: amount,
+          balanceAfter: newCash,
+          memo: memo,
+          actor: "계산전용QR",
+          time: Date.now()
+        }).catch(() => {});
+
+        clearStaffAmount();
+        clearStaffScannedCustomer();
+
+        showToast(`✅ [${targetName}] ${formatMoney(amount)} 결제 완료! (남은 잔액: ${formatMoney(newCash)})`);
       });
-
-      firebaseDb.ref(`${path}/payLogs`).push({
-        student: staffScannedStudent,
-        type: 'withdraw',
-        amount: amount,
-        balanceAfter: newCash,
-        memo: memo,
-        actor: "계산전용QR",
-        time: Date.now()
-      });
-
-      const paidCustomer = staffScannedStudent;
-      clearStaffAmount();
-      clearStaffScannedCustomer();
-
-      showToast(`✅ [${paidCustomer}] ${formatMoney(amount)} 결제 완료! (남은 잔액: ${formatMoney(newCash)})`);
     }
 
     function renderStaffReceiptLogs() {
