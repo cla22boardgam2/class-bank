@@ -443,13 +443,59 @@
        1. 아래 DEFAULT_FIREBASE_DB_URL의 큰따옴표(" ") 안에 선생님의 Firebase DB 주소를 넣으세요.
        2. 주의: index.html 파일의 같은 위치에도 동일한 주소를 입력해야 거래소와 연동됩니다!
        ================================================================================= */
-    const DEFAULT_FIREBASE_DB_URL = "https://my-stock-class-default-rtdb.firebaseio.com/";
+    const DEFAULT_FIREBASE_DB_URL = "내주소";
 
     // 데이터베이스 내 저장 폴더명 (index.html과 반드시 동일해야 함)
     const FIREBASE_ROOT_PATH = "kosdaq_training_room";
 
     const STORAGE_KEY_TEACHER_AUTH = 'class_pay_training_teacher_pin_v1';
+    const STORAGE_KEY_VIEW_MODE = 'class_pay_training_view_mode_v1';
     const ROOM_LABELS = { class_1: "연수학급" };
+
+    function savePersistentValue(key, value) {
+      const strVal = String(value);
+      try {
+        localStorage.setItem(key, strVal);
+      } catch (e) {}
+      try {
+        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(strVal)}; path=/; max-age=2592000; SameSite=Lax`;
+      } catch (e) {}
+    }
+
+    function loadPersistentValue(key) {
+      let val = null;
+      try {
+        val = localStorage.getItem(key);
+      } catch (e) {}
+      if (val !== null && val !== undefined && val !== '') {
+        return val;
+      }
+      try {
+        const prefix = `${encodeURIComponent(key)}=`;
+        const cookies = document.cookie ? document.cookie.split('; ') : [];
+        for (let i = 0; i < cookies.length; i++) {
+          if (cookies[i].indexOf(prefix) === 0) {
+            const cookieVal = decodeURIComponent(cookies[i].slice(prefix.length));
+            if (cookieVal !== '') {
+              try {
+                localStorage.setItem(key, cookieVal);
+              } catch (e) {}
+              return cookieVal;
+            }
+          }
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    function removePersistentValue(key) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {}
+      try {
+        document.cookie = `${encodeURIComponent(key)}=; path=/; max-age=0; SameSite=Lax`;
+      } catch (e) {}
+    }
 
     // index.html을 거치지 않고 pay.html을 먼저 열었을 때를 대비한 기본 25명 명단 (예수금 0원)
     const DEFAULT_STUDENTS = [
@@ -506,6 +552,7 @@
     let currentStudentName = "";
     let staffScannedStudent = "";
     let currentViewMode = 'staff';
+    let hasHandledUrlView = false;
 
     let html5QrScanner = null;
     let staffQrScanner = null;
@@ -667,16 +714,18 @@
         const badgeEl = document.getElementById('roomBadgeLabel');
         if (badgeEl) badgeEl.textContent = getDisplayRoomName();
 
-        const savedName = localStorage.getItem(getMyNameKeyForRoom(currentRoomId));
+        const savedName = loadPersistentValue(getMyNameKeyForRoom(currentRoomId));
         if (!currentStudentName || !students[currentStudentName]) {
           currentStudentName = (savedName && students[savedName]) ? savedName : Object.keys(students)[0];
         }
 
         const hasUrlName = new URLSearchParams(window.location.search).get('name');
-        if (isTeacherAuthenticated() && hasUrlName) {
-          switchViewMode('teacher');
-        } else if (!isTeacherAuthenticated()) {
-          switchViewMode('staff');
+        const useUrlName = !hasHandledUrlView && !!hasUrlName;
+        hasHandledUrlView = true;
+        const savedViewMode = loadPersistentValue(STORAGE_KEY_VIEW_MODE);
+        const targetMode = (isTeacherAuthenticated() && (useUrlName || savedViewMode === 'teacher')) ? 'teacher' : 'staff';
+        if (currentViewMode !== targetMode) {
+          switchViewMode(targetMode);
         }
 
         if (staffScannedStudent && students[staffScannedStudent]) {
@@ -962,8 +1011,8 @@
     }
 
     function isTeacherAuthenticated() {
-      const savedPin = localStorage.getItem(STORAGE_KEY_TEACHER_AUTH);
-      return (savedPin === roomTeacherPin || savedPin === "10101");
+      const savedPin = loadPersistentValue(STORAGE_KEY_TEACHER_AUTH);
+      return !!savedPin && (savedPin === String(roomTeacherPin || "10101") || savedPin === "10101");
     }
 
     function onAdminBtnClick() {
@@ -971,7 +1020,8 @@
         if (currentViewMode === 'staff') {
           switchViewMode('teacher');
         } else {
-          localStorage.removeItem(STORAGE_KEY_TEACHER_AUTH);
+          removePersistentValue(STORAGE_KEY_TEACHER_AUTH);
+          removePersistentValue(STORAGE_KEY_VIEW_MODE);
           switchViewMode('staff');
           updateAdminHeaderUI();
           showToast("🔒 관리자 모드가 종료되었습니다. (계산전용 QR 화면)");
@@ -998,7 +1048,7 @@
     function confirmAdminAuth() {
       const inputPin = document.getElementById('adminModalPinInput').value.trim();
       if (inputPin === roomTeacherPin || inputPin === "10101") {
-        localStorage.setItem(STORAGE_KEY_TEACHER_AUTH, inputPin);
+        savePersistentValue(STORAGE_KEY_TEACHER_AUTH, inputPin);
         closeAdminAuthModal();
         switchViewMode('teacher');
         updateAdminHeaderUI();
@@ -1021,6 +1071,7 @@
       const logoBox = document.getElementById('headerLogoBox');
 
       if (mode === 'teacher' && isTeacherAuthenticated()) {
+        savePersistentValue(STORAGE_KEY_VIEW_MODE, 'teacher');
         staffBox.classList.add('hidden');
         teacherBox.classList.remove('hidden');
         subText.textContent = "👑 교사 관리자 모드";
@@ -1031,6 +1082,7 @@
         updatePayAppNameUI();
       } else {
         currentViewMode = 'staff';
+        savePersistentValue(STORAGE_KEY_VIEW_MODE, 'staff');
         teacherBox.classList.add('hidden');
         staffBox.classList.remove('hidden');
         subText.textContent = "🟢 계산전용 QR";
@@ -1065,7 +1117,7 @@
     function selectStudent(name) {
       if (!students[name]) return;
       currentStudentName = name;
-      localStorage.setItem(getMyNameKeyForRoom(currentRoomId), name);
+      savePersistentValue(getMyNameKeyForRoom(currentRoomId), name);
       renderTeacherWalletUI();
     }
 
@@ -1490,6 +1542,18 @@
       renderStaffPriceMenu();
       renderAdminCatalogEditor();
       connectFirebase();
+    });
+
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        const savedViewMode = loadPersistentValue(STORAGE_KEY_VIEW_MODE);
+        const targetMode = (isTeacherAuthenticated() && savedViewMode === 'teacher') ? 'teacher' : 'staff';
+        if (currentViewMode !== targetMode) {
+          switchViewMode(targetMode);
+        } else {
+          updateAdminHeaderUI();
+        }
+      }
     });
   </script>
 </body>
