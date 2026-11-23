@@ -1205,8 +1205,10 @@
     let userManuallyOpenedLogin = false;
     let firebaseDb = null;
     let currentRoomRef = null;
+    let connectedInfoRef = null;
     let isCloudConnected = false;
     let isInitialRoomSync = true;
+    let isOrderInProgress = false;
     let toastTimer = null;
 
     const ECON_CONFIGS = {
@@ -1313,7 +1315,7 @@
       pendingNews = (pendingNews || []).filter(n => Number(n.createdDay) !== Number(marketDay));
       todayNews = generateDailyNews(3, marketDay);
       pendingNews = [...pendingNews, ...todayNews];
-      pushFullStateToCloud();
+      pushMarketFieldsToCloud({ todayNews, pendingNews });
       renderDailyNewsBanner();
       showOrderToast("📰 오늘의 경제 뉴스 3건이 새로 추첨되었습니다! (1~3일 내 랜덤 반영)", "success");
     }
@@ -1322,7 +1324,7 @@
       if (!isTeacherMode) return;
       isTradingPaused = !isTradingPaused;
       updateTradingPauseUI();
-      pushFullStateToCloud();
+      pushMarketFieldsToCloud({ isTradingPaused });
       if (isTradingPaused) {
         showOrderToast("⏸️ 학생 거래가 일시정지되었습니다! (열람만 가능)", "sell");
       } else {
@@ -1623,6 +1625,33 @@
       return localStorage.getItem(STORAGE_KEY_FIREBASE_URL) || DEFAULT_FIREBASE_DB_URL;
     }
 
+    function hasValidCloudUrl() {
+      const url = getFirebaseUrl();
+      return !!(url && url.startsWith("https://"));
+    }
+
+    function normalizeStudentRecord(sObj) {
+      const cleanHoldings = {};
+      if (sObj && sObj.holdings && typeof sObj.holdings === 'object') {
+        Object.entries(sObj.holdings).forEach(([kCode, hVal]) => {
+          if (hVal && Number(hVal.qty) > 0) {
+            cleanHoldings[String(kCode)] = {
+              qty: Number(hVal.qty),
+              totalCost: Number(hVal.totalCost) || 0
+            };
+          }
+        });
+      }
+      return {
+        cash: (sObj && sObj.cash !== undefined) ? Number(sObj.cash) : seedMoney,
+        netDeposit: Number(sObj && sObj.netDeposit) || 0,
+        realizedProfit: Number(sObj && sObj.realizedProfit) || 0,
+        realizedCost: Number(sObj && sObj.realizedCost) || 0,
+        pin: (sObj && sObj.pin) ? String(sObj.pin) : "1234",
+        holdings: cleanHoldings
+      };
+    }
+
     function connectFirebaseCloud(dbUrl) {
       if (!dbUrl || !dbUrl.startsWith("https://")) {
         updateCloudBadgeUI(false);
@@ -1632,21 +1661,45 @@
         if (!firebase.apps.length) firebase.initializeApp({ databaseURL: dbUrl });
         firebaseDb = firebase.database();
         if (currentRoomRef) currentRoomRef.off();
+        if (connectedInfoRef) connectedInfoRef.off();
 
         isInitialRoomSync = true;
+        connectedInfoRef = firebaseDb.ref('.info/connected');
+        connectedInfoRef.on('value', (snap) => {
+          updateCloudBadgeUI(!!snap.val());
+        });
+
         const path = getFirebasePathForRoom(currentRoomId);
         currentRoomRef = firebaseDb.ref(path);
 
         currentRoomRef.on('value', (snapshot) => {
           const cloudData = snapshot.val();
-          updateCloudBadgeUI(true);
 
-          if (!cloudData || !cloudData.stocks || !cloudData.students) {
+          if (!cloudData) {
             isInitialRoomSync = false;
             if (!stocks || stocks.length === 0) setupDefaultStocks();
             if (!students || Object.keys(students).length === 0) setupDefaultStudents();
             ensureNewsScheduleValid();
             pushFullStateToCloud();
+            return;
+          }
+
+          if (!cloudData.stocks || !cloudData.students) {
+            isInitialRoomSync = false;
+            const partialUpdates = { updatedAt: Date.now() };
+            if (!cloudData.stocks) {
+              if (!stocks || stocks.length === 0) setupDefaultStocks();
+              partialUpdates.stocks = stocks;
+            }
+            if (!cloudData.students) {
+              if (!students || Object.keys(students).length === 0) setupDefaultStudents();
+              partialUpdates.students = students;
+            }
+            ensureNewsScheduleValid();
+            saveLocalMirror();
+            firebaseDb.ref(path).update(partialUpdates).catch(err => {
+              console.error("누락 데이터 복구 실패:", err);
+            });
             return;
           }
 
@@ -1714,25 +1767,7 @@
           const restoredStudents = {};
           Object.entries(cloudData.students).forEach(([sName, sObj]) => {
             if (!sObj) return;
-            const cleanHoldings = {};
-            if (sObj.holdings && typeof sObj.holdings === 'object') {
-              Object.entries(sObj.holdings).forEach(([kCode, hVal]) => {
-                if (hVal && Number(hVal.qty) > 0) {
-                  cleanHoldings[String(kCode)] = {
-                    qty: Number(hVal.qty),
-                    totalCost: Number(hVal.totalCost) || 0
-                  };
-                }
-              });
-            }
-            restoredStudents[sName] = {
-              cash: sObj.cash !== undefined ? Number(sObj.cash) : seedMoney,
-              netDeposit: Number(sObj.netDeposit) || 0,
-              realizedProfit: Number(sObj.realizedProfit) || 0,
-              realizedCost: Number(sObj.realizedCost) || 0,
-              pin: sObj.pin ? String(sObj.pin) : "1234",
-              holdings: cleanHoldings
-            };
+            restoredStudents[sName] = normalizeStudentRecord(sObj);
           });
           students = restoredStudents;
 
@@ -1806,6 +1841,97 @@
           showOrderToast("⚠️ 클라우드 쓰기 거부됨: Firebase 규칙(.write: true)을 확인하세요!", "error");
         });
       }
+    }
+
+    function pushMarketFieldsToCloud(fields) {
+      saveLocalMirror();
+      if (isCloudConnected && firebaseDb) {
+        const path = getFirebasePathForRoom(currentRoomId);
+        firebaseDb.ref(path).update({
+          ...fields,
+          updatedAt: Date.now()
+        }).catch(err => {
+          console.error("시장 상태 저장 실패:", err);
+          showOrderToast("⚠️ 클라우드 저장 실패! 인터넷 연결 또는 Firebase 규칙을 확인하세요.", "error");
+        });
+      }
+    }
+
+    function updateStudentWithTransaction(studentName, mutatorFn, onSuccess, onReject, options = {}) {
+      if (!studentName) {
+        if (onReject) onReject("❌ 학생 계좌를 찾을 수 없습니다.");
+        return;
+      }
+
+      if (!hasValidCloudUrl()) {
+        if (!students[studentName]) {
+          students[studentName] = normalizeStudentRecord(null);
+        }
+        const draft = JSON.parse(JSON.stringify(normalizeStudentRecord(students[studentName])));
+        const res = mutatorFn(draft);
+        if (res && res.abort) {
+          if (onReject) onReject(res.reason || "처리를 진행할 수 없습니다.");
+          return;
+        }
+        students[studentName] = normalizeStudentRecord(draft);
+        saveLocalMirror();
+        if (!options.skipRender) renderAll();
+        if (onSuccess) onSuccess(students[studentName], res);
+        return;
+      }
+
+      if (isInitialRoomSync) {
+        if (onReject) onReject("⏳ 서버 데이터를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+      if (!firebaseDb || !isCloudConnected) {
+        if (onReject) onReject("⚠️ 서버 연결이 끊어졌습니다! 인터넷 연결을 확인한 뒤 다시 시도해주세요.");
+        return;
+      }
+
+      const path = getFirebasePathForRoom(currentRoomId);
+      const studentRef = firebaseDb.ref(`${path}/students/${studentName}`);
+      let abortReason = null;
+      let metaResult = null;
+
+      studentRef.transaction((currentData) => {
+        abortReason = null;
+        metaResult = null;
+        const sourceObj = currentData || students[studentName];
+        if (!sourceObj) {
+          abortReason = "❌ 학생 계좌 정보를 찾을 수 없습니다.";
+          return;
+        }
+        const draft = JSON.parse(JSON.stringify(normalizeStudentRecord(sourceObj)));
+        const res = mutatorFn(draft);
+        if (res && res.abort) {
+          abortReason = res.reason || "처리를 진행할 수 없습니다.";
+          return;
+        }
+        metaResult = res;
+        return {
+          cash: Number(draft.cash) || 0,
+          netDeposit: Number(draft.netDeposit) || 0,
+          realizedProfit: Number(draft.realizedProfit) || 0,
+          realizedCost: Number(draft.realizedCost) || 0,
+          pin: String(draft.pin || "1234"),
+          holdings: draft.holdings || {}
+        };
+      }, (error, committed, snapshot) => {
+        if (error || !committed) {
+          if (onReject) {
+            onReject(abortReason || (error ? "⚠️ 서버 저장 실패! 인터넷 연결 또는 Firebase 쓰기 권한을 확인해주세요." : "⚠️ 동시 접속 충돌로 처리가 취소되었습니다. 다시 시도해주세요."));
+          }
+          return;
+        }
+        const committedVal = snapshot ? snapshot.val() : null;
+        if (committedVal) {
+          students[studentName] = normalizeStudentRecord(committedVal);
+        }
+        saveLocalMirror();
+        if (!options.skipRender) renderAll();
+        if (onSuccess) onSuccess(students[studentName], metaResult);
+      });
     }
 
     function pushSingleStudentToCloud(studentName) {
@@ -2106,7 +2232,7 @@
       if (!isTeacherMode) return;
       economyPhase = phase;
       updateEconomyPhaseUI();
-      pushFullStateToCloud();
+      pushMarketFieldsToCloud({ economyPhase });
     }
 
     function updateEconomyPhaseUI() {
@@ -2265,7 +2391,9 @@
       todayNews = generateDailyNews(3, marketDay);
       pendingNews = [...pendingNews, ...todayNews];
 
-      pushFullStateToCloud();
+      pushMarketFieldsToCloud({
+        marketDay, stocks, todayNews, pendingNews, newsHistory, prevTurnStudentAssets, prevTurnStudentRanks
+      });
       renderAll();
 
       if (limitHits.length > 0) {
@@ -2330,46 +2458,83 @@
       }
       const names = Object.keys(students);
       if (names.length === 0) return;
+      if (hasValidCloudUrl()) {
+        if (isInitialRoomSync) {
+          showOrderToast("⏳ 서버 데이터를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "error");
+          return;
+        }
+        if (!firebaseDb || !isCloudConnected) {
+          showOrderToast("⚠️ 서버 연결이 끊어졌습니다! 인터넷 연결을 확인한 뒤 다시 시도해주세요.", "error");
+          return;
+        }
+      }
       const actionLabel = bulkCashMode === 'deposit' ? '일괄 입금' : '일괄 출금';
       if (!confirm(`전체 ${names.length}명의 학생에게 1인당 ${formatMoney(amount)}을(를) ${actionLabel}하시겠습니까?`)) return;
 
       const memo = document.getElementById('bulkCashMemoInput').value.trim() || (bulkCashMode === 'deposit' ? '💰 학급 급여 일괄 지급' : '🏛️ 학급 세금 일괄 차감');
       const path = getFirebasePathForRoom(currentRoomId);
       const now = Date.now();
-      const logPayloads = [];
+      const modeSnapshot = bulkCashMode;
+      const totalCount = names.length;
+      let doneCount = 0;
+      let successCount = 0;
+      let failCount = 0;
+
+      const finishCheck = () => {
+        doneCount++;
+        if (doneCount < totalCount) return;
+        renderAll();
+        closeBulkCashModal();
+        if (failCount === 0) {
+          showOrderToast(
+            modeSnapshot === 'deposit'
+              ? `💰 전체 ${successCount}명에게 ${formatMoney(amount)} 일괄 입금 완료!`
+              : `💸 전체 ${successCount}명에게 최대 ${formatMoney(amount)} 일괄 출금 완료!`,
+            modeSnapshot === 'deposit' ? 'success' : 'sell'
+          );
+        } else {
+          showOrderToast(`⚠️ 일괄 처리 결과: 성공 ${successCount}명 / 실패 ${failCount}명`, "error");
+        }
+      };
 
       names.forEach(name => {
-        const sData = students[name];
-        if (!sData) return;
-        const curCash = Number(sData.cash) || 0;
-        const curNetDep = Number(sData.netDeposit) || 0;
-        if (bulkCashMode === 'deposit') {
-          sData.cash = curCash + amount;
-          sData.netDeposit = curNetDep + amount;
-          logPayloads.push({ student: name, type: 'deposit', amount, balanceAfter: sData.cash, memo, actor: '선생님(일괄)', time: now });
-        } else {
-          const actualDeduct = Math.min(curCash, amount);
-          sData.cash = curCash - actualDeduct;
-          sData.netDeposit = curNetDep - actualDeduct;
-          if (actualDeduct > 0) {
-            logPayloads.push({ student: name, type: 'withdraw', amount: actualDeduct, balanceAfter: sData.cash, memo, actor: '선생님(일괄)', time: now });
-          }
-        }
+        updateStudentWithTransaction(
+          name,
+          (draft) => {
+            const curCash = Number(draft.cash) || 0;
+            const curNetDep = Number(draft.netDeposit) || 0;
+            if (modeSnapshot === 'deposit') {
+              draft.cash = curCash + amount;
+              draft.netDeposit = curNetDep + amount;
+              return { delta: amount };
+            }
+            const actualDeduct = Math.min(curCash, amount);
+            draft.cash = curCash - actualDeduct;
+            draft.netDeposit = curNetDep - actualDeduct;
+            return { delta: actualDeduct };
+          },
+          (updatedStudent, meta) => {
+            successCount++;
+            if (isCloudConnected && firebaseDb && meta && meta.delta > 0) {
+              firebaseDb.ref(`${path}/payLogs`).push({
+                student: name,
+                type: modeSnapshot,
+                amount: meta.delta,
+                balanceAfter: Number(updatedStudent.cash) || 0,
+                memo,
+                actor: '선생님(일괄)',
+                time: now
+              }).catch(() => {});
+            }
+            finishCheck();
+          },
+          () => {
+            failCount++;
+            finishCheck();
+          },
+          { skipRender: true }
+        );
       });
-
-      pushFullStateToCloud();
-      if (isCloudConnected && firebaseDb && logPayloads.length > 0) {
-        const logsRef = firebaseDb.ref(`${path}/payLogs`);
-        logPayloads.forEach(entry => logsRef.push(entry).catch(() => {}));
-      }
-      renderAll();
-      closeBulkCashModal();
-      showOrderToast(
-        bulkCashMode === 'deposit'
-          ? `💰 전체 ${names.length}명에게 ${formatMoney(amount)} 일괄 입금 완료!`
-          : `💸 전체 ${names.length}명에게 최대 ${formatMoney(amount)} 일괄 출금 완료!`,
-        bulkCashMode === 'deposit' ? 'success' : 'sell'
-      );
     }
 
     function promptCashAdjustment() {
@@ -2427,8 +2592,8 @@
 
     function confirmSingleCashAdjustment() {
       if (!isTeacherMode) return;
-      const sData = students[currentStudentName];
-      if (!sData) return;
+      const targetName = currentStudentName;
+      if (!students[targetName]) return;
       const rawVal = document.getElementById('singleCashAmountInput').value.trim();
       const amount = parseInt(rawVal.replace(/,/g, ''), 10);
 
@@ -2437,11 +2602,18 @@
           showOrderToast("⚠️ 누적 입출금 원금을 숫자로 올바르게 입력해주세요.", "error");
           return;
         }
-        sData.netDeposit = amount;
-        pushSingleStudentToCloud(currentStudentName);
-        renderAll();
-        closeCashAdjustModal();
-        showOrderToast(`✅ [${currentStudentName}] 누적 입출금 원금 보정이 완료되었습니다!`, "success");
+        updateStudentWithTransaction(
+          targetName,
+          (draft) => {
+            draft.netDeposit = amount;
+            return { mode: 'netDeposit' };
+          },
+          () => {
+            closeCashAdjustModal();
+            showOrderToast(`✅ [${targetName}] 누적 입출금 원금 보정이 완료되었습니다!`, "success");
+          },
+          (errMsg) => showOrderToast(errMsg, "error")
+        );
         return;
       }
 
@@ -2450,40 +2622,48 @@
         return;
       }
 
-      const curCash = Number(sData.cash) || 0;
-      const curNetDep = Number(sData.netDeposit) || 0;
-      const memo = document.getElementById('singleCashMemoInput').value.trim() || (singleCashMode === 'deposit' ? '💰 급여·상점 지급' : '⚠️ 벌금 차감');
+      const modeSnapshot = singleCashMode;
+      const memo = document.getElementById('singleCashMemoInput').value.trim() || (modeSnapshot === 'deposit' ? '💰 급여·상점 지급' : '⚠️ 벌금 차감');
       const path = getFirebasePathForRoom(currentRoomId);
 
-      if (singleCashMode === 'withdraw') {
-        if (curCash < amount) {
-          showOrderToast(`❌ 출금액이 현재 예수금(${formatMoney(curCash)})보다 클 수 없습니다.`, "error");
-          return;
-        }
-        sData.cash = curCash - amount;
-        sData.netDeposit = curNetDep - amount;
-        pushSingleStudentToCloud(currentStudentName);
-        if (isCloudConnected && firebaseDb) {
-          firebaseDb.ref(`${path}/payLogs`).push({
-            student: currentStudentName, type: 'withdraw', amount, balanceAfter: sData.cash, memo, actor: '선생님', time: Date.now()
-          }).catch(() => {});
-        }
-        renderAll();
-        closeCashAdjustModal();
-        showOrderToast(`💸 [${currentStudentName}] -${formatMoney(amount)} 출금 완료!`, "sell");
-      } else {
-        sData.cash = curCash + amount;
-        sData.netDeposit = curNetDep + amount;
-        pushSingleStudentToCloud(currentStudentName);
-        if (isCloudConnected && firebaseDb) {
-          firebaseDb.ref(`${path}/payLogs`).push({
-            student: currentStudentName, type: 'deposit', amount, balanceAfter: sData.cash, memo, actor: '선생님', time: Date.now()
-          }).catch(() => {});
-        }
-        renderAll();
-        closeCashAdjustModal();
-        showOrderToast(`💰 [${currentStudentName}] ${formatMoney(amount, true)} 입금 완료!`, "success");
-      }
+      updateStudentWithTransaction(
+        targetName,
+        (draft) => {
+          const curCash = Number(draft.cash) || 0;
+          const curNetDep = Number(draft.netDeposit) || 0;
+          if (modeSnapshot === 'withdraw') {
+            if (curCash < amount) {
+              return { abort: true, reason: `❌ 출금액이 현재 예수금(${formatMoney(curCash)})보다 클 수 없습니다.` };
+            }
+            draft.cash = curCash - amount;
+            draft.netDeposit = curNetDep - amount;
+          } else {
+            draft.cash = curCash + amount;
+            draft.netDeposit = curNetDep + amount;
+          }
+          return { mode: modeSnapshot };
+        },
+        (updatedStudent) => {
+          if (isCloudConnected && firebaseDb) {
+            firebaseDb.ref(`${path}/payLogs`).push({
+              student: targetName,
+              type: modeSnapshot,
+              amount,
+              balanceAfter: Number(updatedStudent.cash) || 0,
+              memo,
+              actor: '선생님',
+              time: Date.now()
+            }).catch(() => {});
+          }
+          closeCashAdjustModal();
+          if (modeSnapshot === 'withdraw') {
+            showOrderToast(`💸 [${targetName}] -${formatMoney(amount)} 출금 완료!`, "sell");
+          } else {
+            showOrderToast(`💰 [${targetName}] ${formatMoney(amount, true)} 입금 완료!`, "success");
+          }
+        },
+        (errMsg) => showOrderToast(errMsg, "error")
+      );
     }
 
     function promptRealizedAdjustment() {
@@ -2515,20 +2695,27 @@
 
     function confirmRealizedAdjustment() {
       if (!isTeacherMode) return;
-      const sData = students[currentStudentName];
-      if (!sData) return;
+      const targetName = currentStudentName;
+      if (!students[targetName]) return;
       const newProfit = parseInt((document.getElementById('realizedProfitInput').value || "0").replace(/,/g, ''), 10);
       const newCost = parseInt((document.getElementById('realizedCostInput').value || "0").replace(/,/g, ''), 10);
       if (isNaN(newProfit) || isNaN(newCost) || newCost < 0) {
         showOrderToast("⚠️ 실현손익과 투자원금(0 이상)을 올바르게 입력해주세요.", "error");
         return;
       }
-      sData.realizedProfit = newProfit;
-      sData.realizedCost = newCost;
-      pushSingleStudentToCloud(currentStudentName);
-      renderAll();
-      closeRealizedAdjustModal();
-      showOrderToast(`✅ [${currentStudentName}] 실현손익(${formatMoney(newProfit, true)}) 보정이 완료되었습니다!`, "success");
+      updateStudentWithTransaction(
+        targetName,
+        (draft) => {
+          draft.realizedProfit = newProfit;
+          draft.realizedCost = newCost;
+          return {};
+        },
+        () => {
+          closeRealizedAdjustModal();
+          showOrderToast(`✅ [${targetName}] 실현손익(${formatMoney(newProfit, true)}) 보정이 완료되었습니다!`, "success");
+        },
+        (errMsg) => showOrderToast(errMsg, "error")
+      );
     }
 
     function ensureActiveAccountAndStock() {
@@ -2550,6 +2737,7 @@
     }
 
     function executeOrder() {
+      if (isOrderInProgress) return;
       if (!isTeacherMode && isTradingPaused) {
         showOrderToast("⏸️ 현재 거래가 일시정지 상태입니다. 선생님 안내를 기다려주세요!", "error");
         return;
@@ -2560,132 +2748,188 @@
         showOrderToast("❌ 선택된 종목을 찾을 수 없습니다.", "error");
         return;
       }
-      const sData = students[currentStudentName];
       const qtyInputEl = document.getElementById('orderQtyInput');
       const qty = Math.floor(Number(qtyInputEl ? qtyInputEl.value : 0));
       if (!qty || qty <= 0) {
         showOrderToast("⚠️ 주문 수량을 1주 이상 입력해주세요!", "error");
         return;
       }
+
+      const targetName = currentStudentName;
+      const orderType = currentOrderType;
+      const stockCode = String(s.code);
+      const stockName = s.name;
       const stockPrice = Number(s.price) || 0;
       const totalOrderAmount = qty * stockPrice;
+      const taxRate = Math.max(0, Number(sellTaxRate) || 0);
 
-      if (currentOrderType === 'buy') {
-        if (Number(sData.cash) < totalOrderAmount) {
-          showOrderToast(`❌ 예수금 부족! (필요: ${formatMoney(totalOrderAmount)})`, "error");
-          return;
+      isOrderInProgress = true;
+      updateStudentWithTransaction(
+        targetName,
+        (draft) => {
+          if (orderType === 'buy') {
+            if (Number(draft.cash) < totalOrderAmount) {
+              return { abort: true, reason: `❌ 예수금 부족! (필요: ${formatMoney(totalOrderAmount)})` };
+            }
+            draft.cash = Number(draft.cash) - totalOrderAmount;
+            if (!draft.holdings) draft.holdings = {};
+            if (!draft.holdings[stockCode]) draft.holdings[stockCode] = { qty: 0, totalCost: 0 };
+            draft.holdings[stockCode].qty = Number(draft.holdings[stockCode].qty) + qty;
+            draft.holdings[stockCode].totalCost = Number(draft.holdings[stockCode].totalCost) + totalOrderAmount;
+            return { type: 'buy' };
+          } else {
+            const currentQty = (draft.holdings && draft.holdings[stockCode]) ? Number(draft.holdings[stockCode].qty) : 0;
+            if (currentQty < qty) {
+              return { abort: true, reason: `❌ 보유 주식 부족! (현재 보유: ${currentQty}주)` };
+            }
+            const avgPrice = Number(draft.holdings[stockCode].totalCost) / currentQty;
+            const costBasis = Math.round(avgPrice * qty);
+            const taxAmount = Math.round(totalOrderAmount * (taxRate / 100));
+            const netProceeds = Math.max(0, totalOrderAmount - taxAmount);
+            const tradeProfit = netProceeds - costBasis;
+            const tradeRate = costBasis > 0 ? ((tradeProfit / costBasis) * 100).toFixed(2) : "0.00";
+
+            draft.cash = Number(draft.cash) + netProceeds;
+            draft.realizedCost = (Number(draft.realizedCost) || 0) + costBasis;
+            draft.realizedProfit = (Number(draft.realizedProfit) || 0) + tradeProfit;
+
+            draft.holdings[stockCode].qty = currentQty - qty;
+            draft.holdings[stockCode].totalCost = Math.max(0, Number(draft.holdings[stockCode].totalCost) - costBasis);
+            if (draft.holdings[stockCode].qty <= 0) delete draft.holdings[stockCode];
+
+            return { type: 'sell', tradeProfit, tradeRate, taxAmount };
+          }
+        },
+        (_updated, meta) => {
+          isOrderInProgress = false;
+          if (meta && meta.type === 'buy') {
+            showOrderToast(`✅ [${targetName}] ${stockName} ${qty}주 매수 체결!`, 'success');
+          } else if (meta) {
+            const pSign = meta.tradeProfit >= 0 ? '+' : '';
+            const taxTxt = meta.taxAmount > 0 ? ` · 세금 -${formatMoney(meta.taxAmount)}` : '';
+            showOrderToast(`💰 ${stockName} ${qty}주 매도 확정! (실현손익: ${formatMoney(meta.tradeProfit, true)} / ${pSign}${meta.tradeRate}%${taxTxt})`, 'sell');
+          }
+        },
+        (errMsg) => {
+          isOrderInProgress = false;
+          showOrderToast(errMsg, "error");
         }
-        sData.cash = Number(sData.cash) - totalOrderAmount;
-        if (!sData.holdings[s.code]) sData.holdings[s.code] = { qty: 0, totalCost: 0 };
-        sData.holdings[s.code].qty = Number(sData.holdings[s.code].qty) + qty;
-        sData.holdings[s.code].totalCost = Number(sData.holdings[s.code].totalCost) + totalOrderAmount;
-
-        pushSingleStudentToCloud(currentStudentName);
-        renderAll();
-        showOrderToast(`✅ [${currentStudentName}] ${s.name} ${qty}주 매수 체결!`, 'success');
-      } else {
-        const currentQty = (sData.holdings && sData.holdings[s.code]) ? Number(sData.holdings[s.code].qty) : 0;
-        if (currentQty < qty) {
-          showOrderToast(`❌ 보유 주식 부족! (현재 보유: ${currentQty}주)`, "error");
-          return;
-        }
-        const avgPrice = Number(sData.holdings[s.code].totalCost) / currentQty;
-        const costBasis = Math.round(avgPrice * qty);
-        const taxRate = Math.max(0, Number(sellTaxRate) || 0);
-        const taxAmount = Math.round(totalOrderAmount * (taxRate / 100));
-        const netProceeds = Math.max(0, totalOrderAmount - taxAmount);
-        const tradeProfit = netProceeds - costBasis;
-        const tradeRate = costBasis > 0 ? ((tradeProfit / costBasis) * 100).toFixed(2) : "0.00";
-
-        sData.cash = Number(sData.cash) + netProceeds;
-        sData.realizedCost = (Number(sData.realizedCost) || 0) + costBasis;
-        sData.realizedProfit = (Number(sData.realizedProfit) || 0) + tradeProfit;
-
-        sData.holdings[s.code].qty = currentQty - qty;
-        sData.holdings[s.code].totalCost = Math.max(0, Number(sData.holdings[s.code].totalCost) - costBasis);
-        if (sData.holdings[s.code].qty <= 0) delete sData.holdings[s.code];
-
-        pushSingleStudentToCloud(currentStudentName);
-        renderAll();
-        const pSign = tradeProfit >= 0 ? '+' : '';
-        const taxTxt = taxAmount > 0 ? ` · 세금 -${formatMoney(taxAmount)}` : '';
-        showOrderToast(`💰 ${s.name} ${qty}주 매도 확정! (실현손익: ${formatMoney(tradeProfit, true)} / ${pSign}${tradeRate}%${taxTxt})`, 'sell');
-      }
+      );
     }
 
     function sellAllHoldings() {
+      if (isOrderInProgress) return;
       if (!isTeacherMode && isTradingPaused) {
         showOrderToast("⏸️ 현재 거래가 일시정지 상태입니다. 선생님 안내를 기다려주세요!", "error");
         return;
       }
       ensureActiveAccountAndStock();
-      const sData = students[currentStudentName];
+      const targetName = currentStudentName;
+      const sData = students[targetName];
       const holdingCodes = Object.keys(sData.holdings || {}).filter(code => Number(sData.holdings[code].qty) > 0);
       if (holdingCodes.length === 0) {
-        showOrderToast(`⚠️ [${currentStudentName}] 현재 보유 중인 주식이 없습니다.`, "error");
+        showOrderToast(`⚠️ [${targetName}] 현재 보유 중인 주식이 없습니다.`, "error");
         return;
       }
-      let totalSoldAmount = 0;
-      let totalSoldCost = 0;
-      holdingCodes.forEach(code => {
-        const s = stocks.find(x => String(x.code) === String(code));
-        if (s) {
-          const q = Number(sData.holdings[code].qty);
-          const c = Number(sData.holdings[code].totalCost) || 0;
-          totalSoldAmount += Number(s.price) * q;
-          totalSoldCost += c;
-          delete sData.holdings[code];
-        }
-      });
+      const totalQty = holdingCodes.reduce((sum, code) => sum + (Number(sData.holdings[code].qty) || 0), 0);
+      if (!confirm(`정말로 보유 중인 모든 주식 ${holdingCodes.length}종목(총 ${totalQty.toLocaleString()}주)을 전량 매도하시겠습니까?`)) {
+        return;
+      }
 
       const taxRate = Math.max(0, Number(sellTaxRate) || 0);
-      const taxAmount = Math.round(totalSoldAmount * (taxRate / 100));
-      const netProceeds = Math.max(0, totalSoldAmount - taxAmount);
-      const batchProfit = netProceeds - totalSoldCost;
-      sData.cash = Number(sData.cash) + netProceeds;
-      sData.realizedCost = (Number(sData.realizedCost) || 0) + totalSoldCost;
-      sData.realizedProfit = (Number(sData.realizedProfit) || 0) + batchProfit;
-
-      pushSingleStudentToCloud(currentStudentName);
-      renderAll();
-      const taxTxt = taxAmount > 0 ? ` · 세금 -${formatMoney(taxAmount)}` : '';
-      showOrderToast(`💰 전량 매도 확정! (이번 실현손익: ${formatMoney(batchProfit, true)}${taxTxt})`, "sell");
+      isOrderInProgress = true;
+      updateStudentWithTransaction(
+        targetName,
+        (draft) => {
+          const draftCodes = Object.keys(draft.holdings || {}).filter(code => Number(draft.holdings[code].qty) > 0);
+          if (draftCodes.length === 0) {
+            return { abort: true, reason: `⚠️ [${targetName}] 현재 보유 중인 주식이 없습니다.` };
+          }
+          let totalSoldAmount = 0;
+          let totalSoldCost = 0;
+          draftCodes.forEach(code => {
+            const s = stocks.find(x => String(x.code) === String(code));
+            if (s) {
+              const q = Number(draft.holdings[code].qty);
+              const c = Number(draft.holdings[code].totalCost) || 0;
+              totalSoldAmount += Number(s.price) * q;
+              totalSoldCost += c;
+              delete draft.holdings[code];
+            }
+          });
+          const taxAmount = Math.round(totalSoldAmount * (taxRate / 100));
+          const netProceeds = Math.max(0, totalSoldAmount - taxAmount);
+          const batchProfit = netProceeds - totalSoldCost;
+          draft.cash = Number(draft.cash) + netProceeds;
+          draft.realizedCost = (Number(draft.realizedCost) || 0) + totalSoldCost;
+          draft.realizedProfit = (Number(draft.realizedProfit) || 0) + batchProfit;
+          return { batchProfit, taxAmount };
+        },
+        (_updated, meta) => {
+          isOrderInProgress = false;
+          const taxTxt = meta.taxAmount > 0 ? ` · 세금 -${formatMoney(meta.taxAmount)}` : '';
+          showOrderToast(`💰 전량 매도 확정! (이번 실현손익: ${formatMoney(meta.batchProfit, true)}${taxTxt})`, "sell");
+        },
+        (errMsg) => {
+          isOrderInProgress = false;
+          showOrderToast(errMsg, "error");
+        }
+      );
     }
 
     function aiRandomBuy() {
+      if (isOrderInProgress) return;
       if (!isTeacherMode && isTradingPaused) {
         showOrderToast("⏸️ 현재 거래가 일시정지 상태입니다. 선생님 안내를 기다려주세요!", "error");
         return;
       }
       ensureActiveAccountAndStock();
-      const sData = students[currentStudentName];
+      const targetName = currentStudentName;
+      const sData = students[targetName];
       const minStockPrice = Math.min(...stocks.map(s => Number(s.price)));
       if (Number(sData.cash) < minStockPrice) {
         showOrderToast(`❌ 예수금이 부족하여 AI 매수를 실행할 수 없습니다!`, "error");
         return;
       }
-      let loopSafety = 0;
-      let totalSpent = 0;
-      while (Number(sData.cash) >= minStockPrice && loopSafety < 80) {
-        loopSafety++;
-        const randomStock = stocks[Math.floor(Math.random() * stocks.length)];
-        const sPrice = Number(randomStock.price);
-        if (Number(sData.cash) >= sPrice) {
-          const maxPossible = Math.floor(Number(sData.cash) / sPrice);
-          const buyQty = Math.max(1, Math.floor(Math.random() * Math.min(maxPossible, 5)) + 1);
-          const cost = sPrice * buyQty;
-          if (Number(sData.cash) >= cost) {
-            sData.cash = Number(sData.cash) - cost;
-            totalSpent += cost;
-            if (!sData.holdings[randomStock.code]) sData.holdings[randomStock.code] = { qty: 0, totalCost: 0 };
-            sData.holdings[randomStock.code].qty = Number(sData.holdings[randomStock.code].qty) + buyQty;
-            sData.holdings[randomStock.code].totalCost = Number(sData.holdings[randomStock.code].totalCost) + cost;
+
+      isOrderInProgress = true;
+      updateStudentWithTransaction(
+        targetName,
+        (draft) => {
+          if (Number(draft.cash) < minStockPrice) {
+            return { abort: true, reason: "❌ 예수금이 부족하여 AI 매수를 실행할 수 없습니다!" };
           }
+          let loopSafety = 0;
+          let totalSpent = 0;
+          if (!draft.holdings) draft.holdings = {};
+          while (Number(draft.cash) >= minStockPrice && loopSafety < 80) {
+            loopSafety++;
+            const randomStock = stocks[Math.floor(Math.random() * stocks.length)];
+            const sPrice = Number(randomStock.price);
+            if (Number(draft.cash) >= sPrice) {
+              const maxPossible = Math.floor(Number(draft.cash) / sPrice);
+              const buyQty = Math.max(1, Math.floor(Math.random() * Math.min(maxPossible, 5)) + 1);
+              const cost = sPrice * buyQty;
+              if (Number(draft.cash) >= cost) {
+                draft.cash = Number(draft.cash) - cost;
+                totalSpent += cost;
+                if (!draft.holdings[randomStock.code]) draft.holdings[randomStock.code] = { qty: 0, totalCost: 0 };
+                draft.holdings[randomStock.code].qty = Number(draft.holdings[randomStock.code].qty) + buyQty;
+                draft.holdings[randomStock.code].totalCost = Number(draft.holdings[randomStock.code].totalCost) + cost;
+              }
+            }
+          }
+          return { totalSpent };
+        },
+        (_updated, meta) => {
+          isOrderInProgress = false;
+          showOrderToast(`🤖 [${targetName}] AI 분산 매수 완료! (${formatMoney(meta.totalSpent)} 투자)`, "success");
+        },
+        (errMsg) => {
+          isOrderInProgress = false;
+          showOrderToast(errMsg, "error");
         }
-      }
-      pushSingleStudentToCloud(currentStudentName);
-      renderAll();
-      showOrderToast(`🤖 [${currentStudentName}] AI 분산 매수 완료! (${formatMoney(totalSpent)} 투자)`, "success");
+      );
     }
 
     function switchMobileMarketTab(tab) {
@@ -3858,6 +4102,9 @@
       if (!isTeacherMode) return;
       const snapshot = localStorage.getItem(getSnapshotKeyForRoom(currentRoomId));
       if (!snapshot) return;
+      if (!confirm("직전 턴 마감 이전 상태로 되돌리시겠습니까? (턴 마감 이후 학생들의 매매 내역도 스냅샷 시점으로 되돌아갑니다.)")) {
+        return;
+      }
       const data = JSON.parse(snapshot);
       roomCustomTitle = data.roomCustomTitle || ""; roomTeacherPin = data.roomTeacherPin || "10101";
       currencyUnit = (data.currencyUnit && String(data.currencyUnit).trim()) ? String(data.currencyUnit).trim() : "원";
@@ -4000,17 +4247,36 @@
       const parsedTax = taxInp ? parseFloat(taxInp.value) : 1.0;
       sellTaxRate = isNaN(parsedTax) ? 1.0 : Math.min(10, Math.max(0, Math.round(parsedTax * 10) / 10));
 
+      const prevStudents = students || {};
       const newStudents = {};
+      const updates = {
+        roomCustomTitle,
+        roomTeacherPin,
+        currencyUnit,
+        seedMoney,
+        sellTaxRate,
+        updatedAt: Date.now()
+      };
+
       rawEntries.forEach(entry => {
         const parts = entry.split(':');
         const name = parts[0].trim();
         const pin = (parts[1] && parts[1].trim()) ? parts[1].trim() : "1234";
         if (!name) return;
 
-        if (students[name]) {
-          newStudents[name] = { ...students[name], pin: pin };
+        if (prevStudents[name]) {
+          newStudents[name] = { ...prevStudents[name], pin: pin };
+          updates[`students/${name}/pin`] = pin;
         } else {
-          newStudents[name] = { cash: seedMoney, netDeposit: 0, realizedProfit: 0, realizedCost: 0, pin: pin, holdings: {} };
+          const fresh = { cash: seedMoney, netDeposit: 0, realizedProfit: 0, realizedCost: 0, pin: pin, holdings: {} };
+          newStudents[name] = fresh;
+          updates[`students/${name}`] = fresh;
+        }
+      });
+
+      Object.keys(prevStudents).forEach(oldName => {
+        if (!newStudents[oldName]) {
+          updates[`students/${oldName}`] = null;
         }
       });
 
@@ -4030,7 +4296,19 @@
         }
       });
 
-      pushFullStateToCloud();
+      updates.stocks = stocks;
+      saveLocalMirror();
+      if (hasValidCloudUrl()) {
+        if (!firebaseDb || !isCloudConnected) {
+          showOrderToast("⚠️ 클라우드 미연결 상태: 설정이 서버에 반영되지 않았습니다.", "error");
+        } else {
+          const path = getFirebasePathForRoom(currentRoomId);
+          firebaseDb.ref(path).update(updates).catch(err => {
+            console.error("학급 설정 저장 실패:", err);
+            showOrderToast("⚠️ 클라우드 쓰기 거부됨: Firebase 규칙(.write: true)을 확인하세요!", "error");
+          });
+        }
+      }
       updateRoomSelectorUI();
       renderAll();
       renderStudentLoginGrid();
