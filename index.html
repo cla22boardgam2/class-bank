@@ -157,6 +157,9 @@
         <button type="button" id="viewRankingBtn" onclick="switchMainView('ranking')" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
           <i class="fa-solid fa-trophy mr-1 text-amber-400"></i>랭킹
         </button>
+        <button type="button" id="viewAccountsBtn" onclick="switchMainView('accounts')" class="px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
+          <i class="fa-solid fa-briefcase mr-1 text-sky-400"></i><span id="viewAccountsBtnLabel">내 계좌</span>
+        </button>
         <button type="button" onclick="openMyPayWallet()" class="px-2.5 py-1 rounded-lg font-black text-emerald-300 hover:bg-emerald-950/60 transition-all cursor-pointer" title="내 학급화폐 QR 지갑 및 장부 확인">
           <i class="fa-solid fa-qrcode mr-1 text-emerald-400"></i>페이 지갑
         </button>
@@ -554,6 +557,59 @@
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- 3. 학생별 보유 주식 계좌 현황 뷰 -->
+    <div id="accountsView" class="hidden w-full flex-1 min-h-0 md:absolute md:inset-0 p-4 md:p-5 overflow-y-auto overscroll-contain touch-scroll bg-slate-950 flex flex-col gap-4">
+      <div class="flex items-center justify-between flex-wrap gap-3 flex-shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+            <i class="fa-solid fa-briefcase"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-black text-slate-100">
+              <span id="accountsRoomTitle" class="text-sky-300">연수학급</span>
+              <span id="accountsViewHeading">내 주식 계좌</span>
+            </h2>
+            <p id="accountsViewSubheading" class="text-[11px] text-slate-400">보유 중인 주식 종목별 수량, 매수평균가, 평가금액 및 수익률을 확인하세요.</p>
+          </div>
+        </div>
+
+        <div id="accountsTeacherControls" class="hidden flex-wrap items-center gap-2 text-xs">
+          <div class="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1">
+            <button type="button" id="accSubMode_detail" onclick="setAccountViewSubMode('detail')" class="px-2.5 py-1.5 rounded-lg font-black bg-sky-600 text-white shadow cursor-pointer transition-all">👤 계좌 상세</button>
+            <button type="button" id="accSubMode_all" onclick="setAccountViewSubMode('all')" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white cursor-pointer transition-all">📋 전원 한눈에</button>
+          </div>
+          <select id="accountsSortSelect" onchange="onAccountsFilterChange()" class="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 font-bold outline-none cursor-pointer">
+            <option value="totalAsset">총자산 높은순</option>
+            <option value="profitRate">총수익률 높은순</option>
+            <option value="unrealizedProfit">평가손익 높은순</option>
+            <option value="holdingCount">보유종목 많은순</option>
+            <option value="name">이름순</option>
+          </select>
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
+            <input type="text" id="accountsSearchInput" placeholder="학생 이름 · 보유종목 검색..." oninput="onAccountsFilterChange()"
+              class="w-48 sm:w-56 bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500 select-text">
+          </div>
+        </div>
+      </div>
+
+      <div id="accountsDetailLayout" class="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
+        <aside id="accountsStudentListSidebar" class="hidden w-full lg:w-72 xl:w-80 bg-slate-900 rounded-2xl border border-slate-800 flex-col overflow-hidden flex-shrink-0 max-h-60 lg:max-h-none lg:h-full">
+          <div class="px-3.5 py-2.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between text-xs">
+            <span class="font-black text-slate-200"><i class="fa-solid fa-users text-sky-400 mr-1.5"></i>학생 계좌 목록</span>
+            <span id="accountsSidebarCount" class="font-mono font-bold text-sky-300 text-[11px]">0명</span>
+          </div>
+          <div id="accountsStudentListContainer" class="flex-1 overflow-y-auto overscroll-contain touch-scroll divide-y divide-slate-800/60 p-1.5 space-y-1"></div>
+        </aside>
+
+        <section id="accountsDetailPanel" class="flex-1 min-w-0 bg-slate-900 rounded-2xl border border-slate-800 p-4 md:p-5 flex flex-col gap-4 lg:overflow-y-auto overscroll-contain touch-scroll">
+          <div id="accountDetailContent" class="flex flex-col gap-4"></div>
+        </section>
+      </div>
+
+      <div id="accountsAllGridContainer" class="hidden grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 pb-6"></div>
     </div>
   </div>
 
@@ -1138,6 +1194,11 @@
     let rankingSortMode = 'profitRate';
 
     let isTeacherMode = false;
+    let currentMainView = 'market';
+    let selectedAccountStudentName = '';
+    let accountViewSubMode = 'detail';
+    let accountListSort = 'totalAsset';
+    let accountSearchQuery = '';
     let currentMobileMarketTab = 'chart';
     let bulkCashMode = 'deposit';
     let singleCashMode = 'deposit';
@@ -1538,6 +1599,8 @@
       document.getElementById('headerClassCustomTitle').textContent = `${shortName} 실시간 모의투자`;
       document.getElementById('hudRoomBadge').textContent = shortName;
       document.getElementById('rankingRoomTitle').textContent = shortName;
+      const accRoomEl = document.getElementById('accountsRoomTitle');
+      if (accRoomEl) accRoomEl.textContent = shortName;
       document.getElementById('macroRoomBadge').textContent = `${shortName} 교사 컨트롤`;
       document.getElementById('authModalRoomName').textContent = shortName;
       document.getElementById('setupModalRoomBadge').textContent = shortName;
@@ -1911,6 +1974,8 @@
 
       const holdersCard = document.getElementById('stockHoldersCard');
       const pfGrid = document.getElementById('portfolioHoldersGrid');
+      const accLabel = document.getElementById('viewAccountsBtnLabel');
+      if (accLabel) accLabel.textContent = isTeacherMode ? '학생 계좌' : '내 계좌';
 
       if (isTeacherMode) {
         actionGroup.classList.remove('hidden'); actionGroup.classList.add('flex');
@@ -2654,20 +2719,30 @@
     }
 
     function switchMainView(view) {
+      currentMainView = view;
       const marketView = document.getElementById('marketView');
       const rankingView = document.getElementById('rankingView');
+      const accountsView = document.getElementById('accountsView');
       const marketBtn = document.getElementById('viewMarketBtn');
       const rankingBtn = document.getElementById('viewRankingBtn');
+      const accountsBtn = document.getElementById('viewAccountsBtn');
+      const inactiveCls = "px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition-all cursor-pointer";
+
+      if (marketView) marketView.classList.toggle('hidden', view !== 'market');
+      if (rankingView) rankingView.classList.toggle('hidden', view !== 'ranking');
+      if (accountsView) accountsView.classList.toggle('hidden', view !== 'accounts');
+
+      if (marketBtn) marketBtn.className = view === 'market' ? "px-2.5 py-1 rounded-lg font-black transition-all bg-indigo-600 text-white shadow cursor-pointer" : inactiveCls;
+      if (rankingBtn) rankingBtn.className = view === 'ranking' ? "px-2.5 py-1 rounded-lg font-black transition-all bg-amber-600 text-white shadow cursor-pointer" : inactiveCls;
+      if (accountsBtn) accountsBtn.className = view === 'accounts' ? "px-2.5 py-1 rounded-lg font-black transition-all bg-sky-600 text-white shadow cursor-pointer" : inactiveCls;
+
       if (view === 'market') {
-        marketView.classList.remove('hidden'); rankingView.classList.add('hidden');
-        marketBtn.className = "px-2.5 py-1 rounded-lg font-black transition-all bg-indigo-600 text-white shadow cursor-pointer";
-        rankingBtn.className = "px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition-all cursor-pointer";
         renderDetailView();
-      } else {
-        marketView.classList.add('hidden'); rankingView.classList.remove('hidden');
-        rankingBtn.className = "px-2.5 py-1 rounded-lg font-black transition-all bg-amber-600 text-white shadow cursor-pointer";
-        marketBtn.className = "px-2.5 py-1 rounded-lg font-bold text-slate-400 hover:text-white transition-all cursor-pointer";
+        setTimeout(() => { if (chartInstance) chartInstance.resize(); }, 50);
+      } else if (view === 'ranking') {
         renderClassRankingTable();
+      } else if (view === 'accounts') {
+        renderStudentAccountsView();
       }
     }
 
@@ -2687,6 +2762,7 @@
       renderStockHoldersList();
       renderClassRankingTable();
       updateOrderCalculation();
+      if (currentMainView === 'accounts') renderStudentAccountsView();
     }
 
     function renderStudentSelector() {
@@ -2705,11 +2781,13 @@
         return;
       }
       currentStudentName = name;
-      localStorage.setItem(getMyNameKeyForRoom(currentRoomId), name);
+      if (isTeacherMode) selectedAccountStudentName = name;
+      savePersistentValue(getMyNameKeyForRoom(currentRoomId), name);
       renderStudentHUD();
       renderStudentPortfolio();
       renderStockHoldersList();
       updateOrderCalculation();
+      if (currentMainView === 'accounts') renderStudentAccountsView();
     }
 
     function getStudentStats(name) {
@@ -2933,11 +3011,15 @@
         }
 
         const isCurrent = item.name === currentStudentName;
+        const safeRankName = escapeJsStr(item.name);
         const actionBtn = isTeacherMode
-          ? `<button type="button" onclick="switchToStudent('${item.name}')" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 text-[11px] font-bold transition-all cursor-pointer">교사 열람</button>`
+          ? `<div class="flex items-center justify-center gap-1 flex-wrap">
+               <button type="button" onclick="openStudentAccountView('${safeRankName}')" class="px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-slate-950 text-[11px] font-bold transition-all cursor-pointer">계좌 보기</button>
+               <button type="button" onclick="switchToStudent('${safeRankName}')" class="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 text-[11px] font-bold transition-all cursor-pointer">교사 열람</button>
+             </div>`
           : (isCurrent
               ? `<span class="text-[11px] text-emerald-400 font-bold"><i class="fa-solid fa-check mr-1"></i>접속 중</span>`
-              : `<button type="button" onclick="openStudentLoginOverlay(); promptStudentPin('${item.name}');" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white text-[11px] font-bold transition-all cursor-pointer"><i class="fa-solid fa-lock text-[9px] mr-1"></i>비번 로그인</button>`);
+              : `<button type="button" onclick="openStudentLoginOverlay(); promptStudentPin('${safeRankName}');" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white text-[11px] font-bold transition-all cursor-pointer"><i class="fa-solid fa-lock text-[9px] mr-1"></i>비번 로그인</button>`);
 
         const hiAsset = rankingSortMode === 'totalAsset' ? 'bg-amber-500/10' : '';
         const hiRate = rankingSortMode === 'profitRate' ? 'bg-rose-500/10' : '';
@@ -2962,6 +3044,493 @@
           </tr>
         `;
       }).join('');
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function escapeJsStr(str) {
+      return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    function getStudentHoldingsDetails(name) {
+      const sData = students[name] || { cash: seedMoney, holdings: {} };
+      const items = [];
+      let totalQty = 0;
+      let totalCost = 0;
+      let totalEval = 0;
+
+      Object.entries(sData.holdings || {}).forEach(([code, h]) => {
+        const qty = Number(h && h.qty) || 0;
+        if (qty <= 0) return;
+        const s = stocks.find(x => String(x.code) === String(code));
+        if (!s) return;
+
+        const cost = Number(h.totalCost) || 0;
+        const avgPrice = qty > 0 ? Math.round(cost / qty) : 0;
+        const curPrice = Number(s.price) || 0;
+        const evalValue = curPrice * qty;
+        const profit = evalValue - cost;
+        const profitRate = cost > 0 ? (profit / cost) * 100 : 0;
+
+        totalQty += qty;
+        totalCost += cost;
+        totalEval += evalValue;
+
+        items.push({
+          code: String(s.code),
+          name: s.name,
+          desc: s.desc || getStockDescByCode(s.code) || '',
+          qty,
+          avgPrice,
+          curPrice,
+          dayRate: Number(s.rate) || 0,
+          cost,
+          evalValue,
+          profit,
+          profitRate,
+          weight: 0
+        });
+      });
+
+      items.sort((a, b) => b.evalValue - a.evalValue);
+      items.forEach(item => {
+        item.weight = totalEval > 0 ? (item.evalValue / totalEval) * 100 : 0;
+      });
+
+      return { items, totalQty, totalCost, totalEval };
+    }
+
+    function openStudentAccountView(name) {
+      if (!isTeacherMode) return;
+      selectedAccountStudentName = name;
+      accountViewSubMode = 'detail';
+      switchMainView('accounts');
+    }
+
+    function selectAccountStudent(name) {
+      if (!isTeacherMode) return;
+      selectedAccountStudentName = name;
+      renderStudentAccountsView();
+    }
+
+    function setAccountViewSubMode(mode) {
+      if (!isTeacherMode) return;
+      accountViewSubMode = mode;
+      renderStudentAccountsView();
+    }
+
+    function onAccountsFilterChange() {
+      const searchEl = document.getElementById('accountsSearchInput');
+      const sortEl = document.getElementById('accountsSortSelect');
+      accountSearchQuery = searchEl ? searchEl.value.trim().toLowerCase() : '';
+      accountListSort = sortEl ? sortEl.value : 'totalAsset';
+      renderStudentAccountsView();
+    }
+
+    function openCashAdjustForAccountStudent(name) {
+      if (!isTeacherMode || !students[name]) return;
+      currentStudentName = name;
+      selectedAccountStudentName = name;
+      savePersistentValue(getMyNameKeyForRoom(currentRoomId), name);
+      renderStudentSelector();
+      renderStudentHUD();
+      renderStudentPortfolio();
+      renderStockHoldersList();
+      updateOrderCalculation();
+      promptCashAdjustment();
+    }
+
+    function openRealizedAdjustForAccountStudent(name) {
+      if (!isTeacherMode || !students[name]) return;
+      currentStudentName = name;
+      selectedAccountStudentName = name;
+      savePersistentValue(getMyNameKeyForRoom(currentRoomId), name);
+      renderStudentSelector();
+      renderStudentHUD();
+      renderStudentPortfolio();
+      renderStockHoldersList();
+      updateOrderCalculation();
+      promptRealizedAdjustment();
+    }
+
+    function inspectStockFromAccount(code) {
+      selectedStockCode = String(code);
+      switchMainView('market');
+      renderStockList();
+      renderDetailView();
+      renderStockHoldersList();
+      updateOrderCalculation();
+      if (window.innerWidth < 1024) {
+        switchMobileMarketTab('chart');
+      }
+    }
+
+    function renderSingleAccountDetailHTML(name) {
+      if (!name || !students[name]) {
+        return `<div class="py-16 text-center text-slate-500 text-xs">선택된 학생 계좌 정보를 찾을 수 없습니다.</div>`;
+      }
+
+      const stats = getStudentStats(name);
+      const holdingsInfo = getStudentHoldingsDetails(name);
+      const safeName = escapeHtml(name);
+      const jsName = escapeJsStr(name);
+
+      const tSign = stats.profitRate > 0 ? '+' : '';
+      const tColor = stats.profitRate > 0 ? 'price-up' : (stats.profitRate < 0 ? 'price-down' : 'text-slate-300');
+      const uSign = stats.unrealizedProfit > 0 ? '+' : '';
+      const uColor = stats.unrealizedProfit > 0 ? 'price-up' : (stats.unrealizedProfit < 0 ? 'price-down' : 'text-slate-300');
+      const rSign = stats.realizedProfit > 0 ? '+' : '';
+      const rColor = stats.realizedProfit > 0 ? 'price-up' : (stats.realizedProfit < 0 ? 'price-down' : 'text-slate-300');
+
+      const stockPct = stats.totalAsset > 0 ? Math.min(100, Math.max(0, (stats.stockValue / stats.totalAsset) * 100)) : 0;
+      const cashPct = stats.totalAsset > 0 ? Math.max(0, 100 - stockPct) : 0;
+
+      const headerActions = isTeacherMode
+        ? `<div class="flex items-center gap-1.5 flex-wrap">
+             <button type="button" onclick="openCashAdjustForAccountStudent('${jsName}')" class="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black cursor-pointer">
+               <i class="fa-solid fa-coins mr-1"></i>입출금
+             </button>
+             <button type="button" onclick="openRealizedAdjustForAccountStudent('${jsName}')" class="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black cursor-pointer">
+               <i class="fa-solid fa-sliders mr-1"></i>실현보정
+             </button>
+             <button type="button" onclick="switchToStudent('${jsName}')" class="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow cursor-pointer">
+               <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>거래소 열기
+             </button>
+           </div>`
+        : `<button type="button" onclick="switchMainView('market')" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow cursor-pointer">
+             <i class="fa-solid fa-chart-line mr-1"></i>거래소로 돌아가기
+           </button>`;
+
+      const rowsHtml = holdingsInfo.items.length === 0
+        ? `<tr><td colspan="9" class="py-10 text-center text-slate-500 text-xs">현재 보유 중인 주식이 없습니다. 거래소에서 종목을 매수하면 이곳에 상세 잔고가 표시됩니다.</td></tr>`
+        : holdingsInfo.items.map(h => {
+            const pSign = h.profit >= 0 ? '+' : '';
+            const pColor = h.profit > 0 ? 'price-up' : (h.profit < 0 ? 'price-down' : 'text-slate-300');
+            const dSign = h.dayRate > 0 ? '+' : '';
+            const dColor = h.dayRate > 0 ? 'price-up' : (h.dayRate < 0 ? 'price-down' : 'text-slate-400');
+            return `
+              <tr class="hover:bg-slate-800/40 transition-colors">
+                <td class="py-2.5 px-2.5">
+                  <button type="button" onclick="inspectStockFromAccount('${escapeJsStr(h.code)}')" class="text-left group cursor-pointer">
+                    <div class="font-extrabold text-slate-100 group-hover:text-sky-300 transition-colors">${escapeHtml(h.name)}</div>
+                    <div class="text-[10px] text-slate-500 font-sans">${escapeHtml(h.desc || h.code)}</div>
+                  </button>
+                </td>
+                <td class="py-2.5 px-2.5 text-right font-bold text-slate-100 whitespace-nowrap">${h.qty.toLocaleString()}주</td>
+                <td class="py-2.5 px-2.5 text-right text-slate-300 whitespace-nowrap">${formatMoney(h.avgPrice)}</td>
+                <td class="py-2.5 px-2.5 text-right whitespace-nowrap">
+                  <div class="font-bold text-slate-100">${formatMoney(h.curPrice)}</div>
+                  <div class="text-[10px] ${dColor}">${dSign}${h.dayRate.toFixed(2)}%</div>
+                </td>
+                <td class="py-2.5 px-2.5 text-right text-slate-300 whitespace-nowrap">${formatMoney(h.cost)}</td>
+                <td class="py-2.5 px-2.5 text-right font-black text-slate-100 whitespace-nowrap">${formatMoney(h.evalValue)}</td>
+                <td class="py-2.5 px-2.5 text-right font-black ${pColor} whitespace-nowrap">${formatMoney(h.profit, true)}</td>
+                <td class="py-2.5 px-2.5 text-right font-black ${pColor} whitespace-nowrap">${pSign}${h.profitRate.toFixed(2)}%</td>
+                <td class="py-2.5 px-2.5 text-right text-sky-300 font-bold whitespace-nowrap">${h.weight.toFixed(1)}%</td>
+              </tr>
+            `;
+          }).join('');
+
+      const tfootHtml = holdingsInfo.items.length === 0 ? '' : `
+        <tfoot class="bg-slate-950/90 border-t-2 border-slate-800 font-mono text-[11px] font-black">
+          <tr>
+            <td class="py-2.5 px-2.5 text-slate-300 font-sans">합계 (${holdingsInfo.items.length}종목)</td>
+            <td class="py-2.5 px-2.5 text-right text-slate-100 whitespace-nowrap">${holdingsInfo.totalQty.toLocaleString()}주</td>
+            <td class="py-2.5 px-2.5 text-right text-slate-500">-</td>
+            <td class="py-2.5 px-2.5 text-right text-slate-500">-</td>
+            <td class="py-2.5 px-2.5 text-right text-slate-200 whitespace-nowrap">${formatMoney(holdingsInfo.totalCost)}</td>
+            <td class="py-2.5 px-2.5 text-right text-amber-300 whitespace-nowrap">${formatMoney(holdingsInfo.totalEval)}</td>
+            <td class="py-2.5 px-2.5 text-right ${uColor} whitespace-nowrap">${formatMoney(stats.unrealizedProfit, true)}</td>
+            <td class="py-2.5 px-2.5 text-right ${uColor} whitespace-nowrap">${uSign}${stats.unrealizedRate.toFixed(2)}%</td>
+            <td class="py-2.5 px-2.5 text-right text-sky-300 whitespace-nowrap">${holdingsInfo.totalEval > 0 ? '100.0%' : '0.0%'}</td>
+          </tr>
+        </tfoot>
+      `;
+
+      return `
+        <div class="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-300 flex items-center justify-center font-black text-base">
+              <i class="fa-solid fa-user"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base md:text-lg font-black text-white">${safeName} <span class="text-slate-400 text-xs font-bold">학생 주식 계좌</span></h3>
+                <span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-black">보유 ${holdingsInfo.items.length}종목</span>
+                ${!isTeacherMode ? `<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black">현재 로그인 계좌</span>` : ''}
+              </div>
+              <p class="text-[11px] text-slate-400">종목명을 클릭하면 해당 종목 차트 및 주문 화면으로 이동합니다.</p>
+            </div>
+          </div>
+          ${headerActions}
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 font-mono">
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <span class="text-[10px] text-slate-400 font-sans block">총 평가자산</span>
+            <span class="text-sm font-black text-white block mt-0.5">${formatMoney(stats.totalAsset)}</span>
+            <span class="text-[11px] font-bold ${tColor}">총수익률 ${tSign}${stats.profitRate.toFixed(2)}%</span>
+          </div>
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <span class="text-[10px] text-slate-400 font-sans block">주식 평가금액</span>
+            <span class="text-sm font-black text-amber-300 block mt-0.5">${formatMoney(stats.stockValue)}</span>
+            <span class="text-[11px] text-slate-400">매입원금 ${formatMoney(holdingsInfo.totalCost)}</span>
+          </div>
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <span class="text-[10px] text-slate-400 font-sans block">평가손익 (미실현)</span>
+            <span class="text-sm font-black ${uColor} block mt-0.5">${formatMoney(stats.unrealizedProfit, true)}</span>
+            <span class="text-[11px] font-bold ${uColor}">${uSign}${stats.unrealizedRate.toFixed(2)}%</span>
+          </div>
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <span class="text-[10px] text-slate-400 font-sans block">보유 예수금 (현금)</span>
+            <span class="text-sm font-black text-emerald-400 block mt-0.5">${formatMoney(stats.cash)}</span>
+            <span class="text-[11px] text-slate-400">현금 비중 ${cashPct.toFixed(1)}%</span>
+          </div>
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <span class="text-[10px] text-slate-400 font-sans block">누적 실현손익</span>
+            <span class="text-sm font-black ${rColor} block mt-0.5">${formatMoney(stats.realizedProfit, true)}</span>
+            <span class="text-[11px] font-bold ${rColor}">실현 ${rSign}${stats.realizedRate.toFixed(2)}%</span>
+          </div>
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <span class="text-[10px] text-slate-400 font-sans block">보유 종목 수</span>
+            <span class="text-sm font-black text-sky-300 block mt-0.5">${holdingsInfo.items.length}종목</span>
+            <span class="text-[11px] text-slate-400">총 ${holdingsInfo.totalQty.toLocaleString()}주</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1.5 text-[11px]">
+          <div class="flex items-center justify-between font-bold">
+            <span class="text-slate-300"><i class="fa-solid fa-chart-pie text-sky-400 mr-1.5"></i>자산 구성 비율</span>
+            <span class="font-mono text-slate-300">주식 <strong class="text-sky-300">${stockPct.toFixed(1)}%</strong> · 예수금 <strong class="text-emerald-400">${cashPct.toFixed(1)}%</strong></span>
+          </div>
+          <div class="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden flex">
+            <div class="h-full bg-sky-500 transition-all" style="width: ${stockPct.toFixed(1)}%"></div>
+            <div class="h-full bg-emerald-500 transition-all" style="width: ${cashPct.toFixed(1)}%"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/70 rounded-xl border border-slate-800 overflow-hidden">
+          <div class="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
+            <span class="font-black text-slate-200"><i class="fa-solid fa-layer-group text-amber-400 mr-1.5"></i>보유 종목별 상세 잔고</span>
+            <span class="text-[11px] text-slate-400 font-mono">평가금액 높은순</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left">
+              <thead class="bg-slate-950/90 text-slate-400 border-b border-slate-800 text-[11px]">
+                <tr>
+                  <th class="py-2 px-2.5">종목명 / 업종</th>
+                  <th class="py-2 px-2.5 text-right">보유수량</th>
+                  <th class="py-2 px-2.5 text-right">매수평균가</th>
+                  <th class="py-2 px-2.5 text-right">현재가 (등락률)</th>
+                  <th class="py-2 px-2.5 text-right">매입금액</th>
+                  <th class="py-2 px-2.5 text-right">평가금액</th>
+                  <th class="py-2 px-2.5 text-right">평가손익</th>
+                  <th class="py-2 px-2.5 text-right">수익률</th>
+                  <th class="py-2 px-2.5 text-right">비중</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/50 font-mono text-[11px]">
+                ${rowsHtml}
+              </tbody>
+              ${tfootHtml}
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderStudentAccountsView() {
+      const headingEl = document.getElementById('accountsViewHeading');
+      const subheadingEl = document.getElementById('accountsViewSubheading');
+      const teacherControls = document.getElementById('accountsTeacherControls');
+      const detailLayout = document.getElementById('accountsDetailLayout');
+      const sidebar = document.getElementById('accountsStudentListSidebar');
+      const sidebarList = document.getElementById('accountsStudentListContainer');
+      const sidebarCount = document.getElementById('accountsSidebarCount');
+      const detailContent = document.getElementById('accountDetailContent');
+      const allGrid = document.getElementById('accountsAllGridContainer');
+      if (!detailContent) return;
+
+      if (!isTeacherMode) {
+        if (headingEl) headingEl.textContent = '내 주식 계좌';
+        if (subheadingEl) subheadingEl.textContent = '내가 보유한 주식 종목별 수량, 매수평균가, 평가금액 및 수익률 현황을 확인하세요.';
+        if (teacherControls) { teacherControls.classList.add('hidden'); teacherControls.classList.remove('flex'); }
+        if (allGrid) { allGrid.classList.add('hidden'); allGrid.classList.remove('grid'); }
+        if (detailLayout) { detailLayout.classList.remove('hidden'); detailLayout.classList.add('flex'); }
+        if (sidebar) { sidebar.classList.add('hidden'); sidebar.classList.remove('flex'); }
+        detailContent.innerHTML = renderSingleAccountDetailHTML(currentStudentName);
+        return;
+      }
+
+      if (headingEl) headingEl.textContent = '학생별 주식 계좌 현황';
+      if (subheadingEl) subheadingEl.textContent = '학생마다 보유 중인 주식 종목, 평가금액, 수익률을 상세히 확인하거나 전체 계좌를 한눈에 비교하세요.';
+      if (teacherControls) { teacherControls.classList.remove('hidden'); teacherControls.classList.add('flex'); }
+
+      const detailBtn = document.getElementById('accSubMode_detail');
+      const allBtn = document.getElementById('accSubMode_all');
+      const activeSubCls = "px-2.5 py-1.5 rounded-lg font-black bg-sky-600 text-white shadow cursor-pointer transition-all";
+      const inactiveSubCls = "px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white cursor-pointer transition-all";
+      if (detailBtn) detailBtn.className = accountViewSubMode === 'detail' ? activeSubCls : inactiveSubCls;
+      if (allBtn) allBtn.className = accountViewSubMode === 'all' ? activeSubCls : inactiveSubCls;
+
+      const allItems = Object.keys(students).map(name => ({
+        name,
+        stats: getStudentStats(name),
+        holdingsInfo: getStudentHoldingsDetails(name)
+      }));
+
+      const q = accountSearchQuery;
+      const filtered = q
+        ? allItems.filter(item =>
+            item.name.toLowerCase().includes(q) ||
+            item.holdingsInfo.items.some(h => h.name.toLowerCase().includes(q) || (h.desc && h.desc.toLowerCase().includes(q)))
+          )
+        : allItems;
+
+      filtered.sort((a, b) => {
+        if (accountListSort === 'profitRate') return (b.stats.profitRate - a.stats.profitRate) || (b.stats.totalAsset - a.stats.totalAsset);
+        if (accountListSort === 'unrealizedProfit') return (b.stats.unrealizedProfit - a.stats.unrealizedProfit) || (b.stats.totalAsset - a.stats.totalAsset);
+        if (accountListSort === 'holdingCount') return (b.holdingsInfo.items.length - a.holdingsInfo.items.length) || (b.stats.stockValue - a.stats.stockValue);
+        if (accountListSort === 'name') return a.name.localeCompare(b.name, 'ko');
+        return (b.stats.totalAsset - a.stats.totalAsset) || (b.stats.profitRate - a.stats.profitRate);
+      });
+
+      if (sidebarCount) sidebarCount.textContent = `${filtered.length}명`;
+
+      if (accountViewSubMode === 'all') {
+        if (detailLayout) { detailLayout.classList.add('hidden'); detailLayout.classList.remove('flex'); }
+        if (allGrid) { allGrid.classList.remove('hidden'); allGrid.classList.add('grid'); }
+
+        if (filtered.length === 0) {
+          allGrid.innerHTML = `<div class="col-span-full bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 text-xs">검색 조건에 맞는 학생 또는 보유 종목이 없습니다.</div>`;
+          return;
+        }
+
+        allGrid.innerHTML = filtered.map(item => {
+          const { name, stats, holdingsInfo } = item;
+          const safeName = escapeHtml(name);
+          const jsName = escapeJsStr(name);
+          const tSign = stats.profitRate > 0 ? '+' : '';
+          const tColor = stats.profitRate > 0 ? 'price-up' : (stats.profitRate < 0 ? 'price-down' : 'text-slate-300');
+          const uSign = stats.unrealizedProfit > 0 ? '+' : '';
+          const uColor = stats.unrealizedProfit > 0 ? 'price-up' : (stats.unrealizedProfit < 0 ? 'price-down' : 'text-slate-300');
+          const isCurrent = name === currentStudentName;
+
+          const holdingRows = holdingsInfo.items.length === 0
+            ? `<div class="py-4 text-center text-slate-500 text-[11px]">보유 중인 주식이 없습니다.</div>`
+            : holdingsInfo.items.map(h => {
+                const pSign = h.profit >= 0 ? '+' : '';
+                const pColor = h.profit > 0 ? 'price-up' : (h.profit < 0 ? 'price-down' : 'text-slate-300');
+                return `
+                  <div class="py-1.5 flex items-center justify-between gap-2 text-[11px]">
+                    <button type="button" onclick="inspectStockFromAccount('${escapeJsStr(h.code)}')" class="text-left font-bold text-slate-200 hover:text-sky-300 truncate cursor-pointer">
+                      ${escapeHtml(h.name)} <span class="text-slate-400 font-mono font-normal">${h.qty.toLocaleString()}주</span>
+                    </button>
+                    <div class="text-right font-mono shrink-0">
+                      <span class="font-bold text-slate-100">${formatMoney(h.evalValue)}</span>
+                      <span class="ml-1 font-bold ${pColor}">${pSign}${h.profitRate.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+
+          return `
+            <div class="bg-slate-900 rounded-2xl border ${isCurrent ? 'border-sky-500/60' : 'border-slate-800'} p-4 flex flex-col gap-3 shadow-lg">
+              <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="font-black text-sm text-white truncate">${safeName}</span>
+                  <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[10px] font-black shrink-0">${holdingsInfo.items.length}종목</span>
+                  ${isCurrent ? `<span class="px-1.5 py-0.5 rounded bg-indigo-600 text-white text-[9px] font-bold shrink-0">현재선택</span>` : ''}
+                </div>
+                <button type="button" onclick="openStudentAccountView('${jsName}')" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-black shrink-0 cursor-pointer">
+                  상세보기
+                </button>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 font-mono text-[11px]">
+                <div>
+                  <span class="text-[10px] text-slate-400 font-sans block">총평가자산</span>
+                  <span class="font-black text-white">${formatMoney(stats.totalAsset)}</span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 font-sans block">주식평가액</span>
+                  <span class="font-bold text-amber-300">${formatMoney(stats.stockValue)}</span>
+                </div>
+                <div class="text-right">
+                  <span class="text-[10px] text-slate-400 font-sans block">총수익률</span>
+                  <span class="font-black ${tColor}">${tSign}${stats.profitRate.toFixed(2)}%</span>
+                </div>
+                <div class="col-span-2 pt-1 border-t border-slate-800/60">
+                  <span class="text-[10px] text-slate-400 font-sans">평가손익: </span>
+                  <span class="font-bold ${uColor}">${formatMoney(stats.unrealizedProfit, true)}</span>
+                </div>
+                <div class="text-right pt-1 border-t border-slate-800/60">
+                  <span class="text-[10px] text-slate-400 font-sans">현금: </span>
+                  <span class="font-bold text-emerald-400">${formatMoney(stats.cash)}</span>
+                </div>
+              </div>
+
+              <div class="flex-1 bg-slate-950/60 rounded-xl border border-slate-800/70 px-3 py-1.5 max-h-44 overflow-y-auto divide-y divide-slate-800/50">
+                ${holdingRows}
+              </div>
+
+              <div class="flex items-center gap-1.5 pt-1 text-[11px]">
+                <button type="button" onclick="openCashAdjustForAccountStudent('${jsName}')" class="flex-1 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold cursor-pointer">입출금</button>
+                <button type="button" onclick="openRealizedAdjustForAccountStudent('${jsName}')" class="flex-1 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold cursor-pointer">실현보정</button>
+                <button type="button" onclick="switchToStudent('${jsName}')" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white font-bold cursor-pointer">거래소</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+        return;
+      }
+
+      if (allGrid) { allGrid.classList.add('hidden'); allGrid.classList.remove('grid'); }
+      if (detailLayout) { detailLayout.classList.remove('hidden'); detailLayout.classList.add('flex'); }
+      if (sidebar) { sidebar.classList.remove('hidden'); sidebar.classList.add('flex'); }
+
+      if (filtered.length === 0) {
+        if (sidebarList) sidebarList.innerHTML = `<div class="py-8 text-center text-slate-500 text-xs">일치하는 학생 또는 종목이 없습니다.</div>`;
+        detailContent.innerHTML = `<div class="py-16 text-center text-slate-500 text-xs">검색 조건에 맞는 계좌가 없습니다.</div>`;
+        return;
+      }
+
+      if (!selectedAccountStudentName || !students[selectedAccountStudentName] || !filtered.some(x => x.name === selectedAccountStudentName)) {
+        selectedAccountStudentName = filtered.some(x => x.name === currentStudentName) ? currentStudentName : filtered[0].name;
+      }
+
+      if (sidebarList) {
+        sidebarList.innerHTML = filtered.map(item => {
+          const { name, stats, holdingsInfo } = item;
+          const isSelected = name === selectedAccountStudentName;
+          const tSign = stats.profitRate > 0 ? '+' : '';
+          const tColor = stats.profitRate > 0 ? 'price-up' : (stats.profitRate < 0 ? 'price-down' : 'text-slate-400');
+          const uSign = stats.unrealizedProfit > 0 ? '+' : '';
+          const uColor = stats.unrealizedProfit > 0 ? 'price-up' : (stats.unrealizedProfit < 0 ? 'price-down' : 'text-slate-400');
+
+          return `
+            <button type="button" onclick="selectAccountStudent('${escapeJsStr(name)}')"
+              class="w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-sky-950/60 border-sky-500/60 shadow' : 'bg-slate-950/40 border-transparent hover:bg-slate-800/60'}">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-black text-xs text-slate-100 truncate">${escapeHtml(name)}</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[10px] shrink-0">${holdingsInfo.items.length}종목</span>
+              </div>
+              <div class="flex items-center justify-between gap-2 mt-1 font-mono text-[11px]">
+                <span class="font-bold text-slate-200">${formatMoney(stats.totalAsset)}</span>
+                <span class="font-bold ${tColor}">${tSign}${stats.profitRate.toFixed(2)}%</span>
+              </div>
+              <div class="flex items-center justify-between gap-2 mt-0.5 font-mono text-[10px] text-slate-400">
+                <span>주식 ${formatMoney(stats.stockValue)}</span>
+                <span class="${uColor}">${uSign}${stats.unrealizedRate.toFixed(1)}%</span>
+              </div>
+            </button>
+          `;
+        }).join('');
+      }
+
+      detailContent.innerHTML = renderSingleAccountDetailHTML(selectedAccountStudentName);
     }
 
     function switchToStudent(name) {
